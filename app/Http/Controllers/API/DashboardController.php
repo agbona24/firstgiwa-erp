@@ -51,7 +51,7 @@ class DashboardController extends Controller
         $productionLoss = ProductionRun::where('tenant_id', $tenantId)
             ->where('status', 'completed')
             ->where('completed_at', '>=', $currentMonth)
-            ->sum('loss_quantity');
+            ->sum('wastage_quantity');
 
         $avgLoss = $productionOutput > 0 
             ? round(($productionLoss / ($productionOutput + $productionLoss)) * 100, 1) 
@@ -59,10 +59,10 @@ class DashboardController extends Controller
 
         // Outstanding receivables
         $receivables = Customer::where('tenant_id', $tenantId)
-            ->sum('current_credit');
+            ->sum('outstanding_balance');
 
         $overdueCount = Customer::where('tenant_id', $tenantId)
-            ->where('current_credit', '>', 0)
+            ->where('outstanding_balance', '>', 0)
             ->where('credit_blocked', true)
             ->count();
 
@@ -120,7 +120,8 @@ class DashboardController extends Controller
         // Payments collected today
         $paymentsCollected = Payment::where('tenant_id', $tenantId)
             ->whereDate('payment_date', $today)
-            ->where('type', 'received')
+            ->where('payment_type', 'receivable')
+            ->where('status', 'completed')
             ->sum('amount');
 
         // POS transactions today
@@ -137,7 +138,7 @@ class DashboardController extends Controller
         // Production runs today
         $productionRuns = ProductionRun::where('tenant_id', $tenantId)
             ->whereIn('status', ['in_progress', 'completed'])
-            ->whereDate('started_at', $today)
+            ->whereDate('production_date', $today)
             ->count();
 
         $productionOutput = ProductionRun::where('tenant_id', $tenantId)
@@ -242,7 +243,7 @@ class DashboardController extends Controller
             $loss = ProductionRun::where('tenant_id', $tenantId)
                 ->where('status', 'completed')
                 ->whereDate('completed_at', $date)
-                ->sum('loss_quantity');
+                ->sum('wastage_quantity');
 
             $data[] = [
                 'date' => $date->format('M d'),
@@ -329,20 +330,20 @@ class DashboardController extends Controller
 
         $alerts = Customer::where('tenant_id', $tenantId)
             ->where('credit_limit', '>', 0)
-            ->whereRaw('current_credit >= credit_limit * 0.8')
-            ->orderByRaw('current_credit / credit_limit DESC')
+            ->whereRaw('outstanding_balance >= credit_limit * 0.8')
+            ->orderByRaw('outstanding_balance / credit_limit DESC')
             ->limit(5)
             ->get()
             ->map(function ($customer) {
                 $usage = $customer->credit_limit > 0 
-                    ? round(($customer->current_credit / $customer->credit_limit) * 100)
+                    ? round(($customer->outstanding_balance / $customer->credit_limit) * 100)
                     : 0;
 
                 return [
                     'id' => $customer->id,
                     'customer' => $customer->name,
                     'credit_limit' => $customer->credit_limit,
-                    'credit_used' => $customer->current_credit,
+                    'credit_used' => $customer->outstanding_balance,
                     'status' => $customer->credit_blocked ? 'blocked' : ($usage >= 100 ? 'blocked' : 'high_usage'),
                 ];
             });
@@ -377,7 +378,7 @@ class DashboardController extends Controller
             ->count();
 
         $overduePayments = Customer::where('tenant_id', $tenantId)
-            ->where('current_credit', '>', 0)
+            ->where('outstanding_balance', '>', 0)
             ->where('credit_blocked', true)
             ->count();
 
