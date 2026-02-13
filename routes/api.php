@@ -2,23 +2,23 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\CategoryController;
-use App\Http\Controllers\Api\InventoryController;
-use App\Http\Controllers\Api\WarehouseController;
-use App\Http\Controllers\Api\CustomerController;
-use App\Http\Controllers\Api\FormulaController;
-use App\Http\Controllers\Api\SalesOrderController;
-use App\Http\Controllers\Api\SupplierController;
-use App\Http\Controllers\Api\ExpenseController;
-use App\Http\Controllers\Api\PurchaseOrderController;
-use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\StaffController;
-use App\Http\Controllers\Api\ProductionController;
-use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\PayrollController;
-use App\Http\Controllers\Api\POSController;
-use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\API\ProductController;
+use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\InventoryController;
+use App\Http\Controllers\API\WarehouseController;
+use App\Http\Controllers\API\CustomerController;
+use App\Http\Controllers\API\FormulaController;
+use App\Http\Controllers\API\SalesOrderController;
+use App\Http\Controllers\API\SupplierController;
+use App\Http\Controllers\API\ExpenseController;
+use App\Http\Controllers\API\PurchaseOrderController;
+use App\Http\Controllers\API\PaymentController;
+use App\Http\Controllers\API\StaffController;
+use App\Http\Controllers\API\ProductionController;
+use App\Http\Controllers\API\UserController;
+use App\Http\Controllers\API\PayrollController;
+use App\Http\Controllers\API\POSController;
+use App\Http\Controllers\API\AuditLogController;
 use App\Http\Controllers\API\CreditAnalyticsController;
 
 // Settings Controllers
