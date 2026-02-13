@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import Login from './pages/auth/Login';
 import Dashboard from './pages/Dashboard';
 import { useAuth } from './hooks/useAuth';
@@ -6,11 +7,17 @@ import AppLayout from './components/layout/AppLayout';
 import { ToastProvider } from './contexts/ToastContext';
 import { ConfirmProvider } from './hooks/useConfirm';
 import { OnboardingProvider } from './contexts/OnboardingContext';
+import { TutorialProvider } from './contexts/TutorialContext';
 import { BranchProvider } from './contexts/BranchContext';
+import { PWAProvider } from './contexts/PWAContext';
 import OnboardingTour from './components/OnboardingTour';
+import TutorialModal from './components/TutorialModal';
+import { PWAInstallBanner, OfflineIndicator, UpdateBanner } from './components/PWAComponents';
 import SetupWizard from './pages/setup/SetupWizard';
 import InstallWizard from './pages/install/InstallWizard';
 import ErrorBoundary from './components/ErrorBoundary';
+import TutorialCenter from './pages/TutorialCenter';
+import { checkSetupStatus } from './services/setupAPI';
 
 // Module Pages
 import InventoryList from './pages/inventory/InventoryList';
@@ -62,8 +69,36 @@ if (typeof window !== 'undefined') {
 
 function App() {
     const { user, loading } = useAuth();
+    const [appStatus, setAppStatus] = useState({ checking: true, needsInstall: false, needsSetup: false });
 
-    if (loading) {
+    useEffect(() => {
+        checkAppStatus();
+    }, []);
+
+    const checkAppStatus = async () => {
+        // Skip check if we're already on install or setup page
+        const path = window.location.pathname;
+        if (path === '/install' || path === '/setup') {
+            setAppStatus({ checking: false, needsInstall: false, needsSetup: false });
+            return;
+        }
+
+        try {
+            const status = await checkSetupStatus();
+            if (status.needs_install) {
+                setAppStatus({ checking: false, needsInstall: true, needsSetup: false });
+            } else if (!status.setup_complete) {
+                setAppStatus({ checking: false, needsInstall: false, needsSetup: true });
+            } else {
+                setAppStatus({ checking: false, needsInstall: false, needsSetup: false });
+            }
+        } catch (error) {
+            console.log('Status check failed, assuming needs install');
+            setAppStatus({ checking: false, needsInstall: true, needsSetup: false });
+        }
+    };
+
+    if (loading || appStatus.checking) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="text-center">
@@ -74,12 +109,30 @@ function App() {
         );
     }
 
+    // Redirect to install if APP_INSTALLED=false
+    if (appStatus.needsInstall && window.location.pathname !== '/install') {
+        window.location.href = '/install';
+        return null;
+    }
+
+    // Redirect to setup if installed but not set up
+    if (appStatus.needsSetup && window.location.pathname !== '/setup' && window.location.pathname !== '/install') {
+        window.location.href = '/setup';
+        return null;
+    }
+
     return (
         <ToastProvider>
             <ConfirmProvider>
+                <PWAProvider>
                 <BranchProvider isAuthenticated={!!user}>
                 <OnboardingProvider>
+                <TutorialProvider>
                 <OnboardingTour />
+                <TutorialModal />
+                <PWAInstallBanner />
+                <OfflineIndicator />
+                <UpdateBanner />
                 <Routes>
                     {/* Installation Wizard */}
                     <Route path="/install" element={<InstallWizard />} />
@@ -132,6 +185,7 @@ function App() {
                         <Route path="/payroll/process" element={<ProcessPayroll />} />
                         <Route path="/vat-report" element={<VATReport />} />
                         <Route path="/notifications" element={<Notifications />} />
+                        <Route path="/tutorials" element={<TutorialCenter />} />
                         <Route path="/settings" element={<Settings />} />
                     </Route>
 
@@ -154,8 +208,10 @@ function App() {
                         }
                     />
                 </Routes>
+                </TutorialProvider>
                 </OnboardingProvider>
                 </BranchProvider>
+                </PWAProvider>
             </ConfirmProvider>
         </ToastProvider>
     );

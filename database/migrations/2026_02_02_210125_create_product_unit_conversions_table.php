@@ -21,7 +21,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             
-            $table->unique(['product_id', 'from_unit_id', 'to_unit_id']);
+            $table->unique(['product_id', 'from_unit_id', 'to_unit_id'], 'puc_product_from_to_unique');
             $table->index('tenant_id');
         });
     }

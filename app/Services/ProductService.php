@@ -213,4 +213,70 @@ class ProductService extends BaseService
     {
         return $this->update($product, ['is_active' => false], 'Product deactivated');
     }
+
+    /**
+     * Delete all products (bulk delete).
+     * Only deletes products with zero inventory.
+     */
+    public function deleteAll(?string $reason = null): int
+    {
+        return $this->transaction(function () use ($reason) {
+            $deleted = 0;
+            
+            // Get all products that have zero or no inventory
+            $products = Product::whereDoesntHave('inventory', function ($q) {
+                $q->where('quantity', '>', 0);
+            })->get();
+            
+            foreach ($products as $product) {
+                try {
+                    if ($reason) {
+                        $product->setAuditReason($reason);
+                    }
+                    $product->delete();
+                    $deleted++;
+                } catch (\Exception $e) {
+                    // Skip products that can't be deleted (e.g., in use by formulas)
+                    continue;
+                }
+            }
+            
+            return $deleted;
+        });
+    }
+
+    /**
+     * Bulk delete selected products.
+     */
+    public function bulkDelete(array $ids, ?string $reason = null): array
+    {
+        return $this->transaction(function () use ($ids, $reason) {
+            $deleted = 0;
+            $failed = 0;
+            $errors = [];
+            
+            foreach ($ids as $id) {
+                $product = $this->find($id);
+                if (!$product) {
+                    $failed++;
+                    $errors[] = "Product ID {$id} not found";
+                    continue;
+                }
+                
+                try {
+                    $this->delete($product, $reason);
+                    $deleted++;
+                } catch (\Exception $e) {
+                    $failed++;
+                    $errors[] = "Product '{$product->name}': " . $e->getMessage();
+                }
+            }
+            
+            return [
+                'deleted' => $deleted,
+                'failed' => $failed,
+                'errors' => $errors,
+            ];
+        });
+    }
 }

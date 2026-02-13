@@ -6,6 +6,20 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
+        <!-- PWA Meta Tags -->
+        <meta name="theme-color" content="#2563eb">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="FactoryPulse">
+        <meta name="description" content="Real-Time Manufacturing ERP - Manage inventory, sales, production, and more">
+        
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="/manifest.json">
+        
+        <!-- PWA Icons -->
+        <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />

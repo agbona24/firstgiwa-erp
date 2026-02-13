@@ -88,6 +88,22 @@ const productAPI = {
         const response = await api.post(`/products/${id}/deactivate`);
         return response.data;
     },
+
+    /**
+     * Delete all products (bulk delete)
+     */
+    deleteAllProducts: async (reason = 'Bulk delete by user') => {
+        const response = await api.delete('/products/bulk/delete-all', { data: { reason } });
+        return response.data;
+    },
+
+    /**
+     * Bulk delete selected products
+     */
+    bulkDeleteProducts: async (ids, reason = 'Bulk delete by user') => {
+        const response = await api.delete('/products/bulk/delete', { data: { ids, reason } });
+        return response.data;
+    },
 };
 
 export default productAPI;

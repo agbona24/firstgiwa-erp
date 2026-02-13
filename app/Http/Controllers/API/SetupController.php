@@ -25,12 +25,26 @@ class SetupController extends Controller
      */
     public function checkStatus(): JsonResponse
     {
+        // Check APP_INSTALLED env variable first - if false, should go to /install not /setup
+        $appInstalled = env('APP_INSTALLED', false);
+        
+        if ($appInstalled === false || $appInstalled === 'false') {
+            return response()->json([
+                'success' => true,
+                'setup_complete' => false,
+                'needs_install' => true, // Frontend should redirect to /install
+                'tenant' => null,
+            ]);
+        }
+        
+        // App is installed, check if setup (onboarding) is complete
         $tenant = Tenant::first();
         $setupComplete = $tenant && User::where('tenant_id', $tenant->id)->exists();
 
         return response()->json([
             'success' => true,
             'setup_complete' => $setupComplete,
+            'needs_install' => false,
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'name' => $tenant->name,
@@ -76,6 +90,8 @@ class SetupController extends Controller
             'products.units' => 'nullable|array',
             'products.units.*.name' => 'required|string|max:50',
             'products.units.*.abbreviation' => 'nullable|string|max:20',
+            'products.default_items' => 'nullable|array',
+            'products.default_items.*' => 'string|max:150',
             
             // Admin Account
             'admin.name' => 'required|string|max:255',
@@ -110,9 +126,11 @@ class SetupController extends Controller
             // 3. Create Warehouses
             $warehouses = $validated['warehouses'] ?? [];
             
+            $defaultWarehouseId = null;
+
             if (empty($warehouses)) {
                 // Create default warehouse
-                Warehouse::create([
+                $warehouse = Warehouse::create([
                     'tenant_id' => $tenant->id,
                     'branch_id' => $mainBranch->id,
                     'name' => 'Main Warehouse',
@@ -120,9 +138,10 @@ class SetupController extends Controller
                     'address' => $validated['company']['address'] ?? null,
                     'is_active' => true,
                 ]);
+                $defaultWarehouseId = $warehouse->id;
             } else {
                 foreach ($warehouses as $idx => $wh) {
-                    Warehouse::create([
+                    $warehouse = Warehouse::create([
                         'tenant_id' => $tenant->id,
                         'branch_id' => $mainBranch->id,
                         'name' => $wh['name'],
@@ -131,6 +150,10 @@ class SetupController extends Controller
                         'location' => $wh['type'] ?? null, // Store type as location
                         'is_active' => true,
                     ]);
+
+                    if ($idx === 0) {
+                        $defaultWarehouseId = $warehouse->id;
+                    }
                 }
             }
 
@@ -179,7 +202,14 @@ class SetupController extends Controller
                 ]);
             }
 
-            // 7. Create Admin User
+            // 7. Seed default products for quick onboarding
+            $this->seedDefaultProducts(
+                $tenant->id,
+                $defaultWarehouseId,
+                $validated['products']['default_items'] ?? null
+            );
+
+            // 8. Create Admin User
             $admin = User::create([
                 'tenant_id' => $tenant->id,
                 'branch_id' => $mainBranch->id,
@@ -193,7 +223,7 @@ class SetupController extends Controller
             // Assign super-admin role
             $admin->assignRole('Super Admin');
 
-            // 8. Save Company Settings
+            // 9. Save Company Settings
             $businessSettings = $validated['business'] ?? [];
             $settingsToSave = [
                 'general' => [
@@ -287,5 +317,121 @@ class SetupController extends Controller
             'EUR' => '€',
             default => '₦',
         };
+    }
+
+    /**
+     * Seed default products during setup so users can start immediately.
+     */
+    private function seedDefaultProducts(int $tenantId, ?int $warehouseId = null, ?array $customItems = null): void
+    {
+        $category = Category::firstOrCreate(
+            ['code' => 'RAW-' . $tenantId],
+            [
+                'tenant_id' => $tenantId,
+                'name' => 'Raw Materials',
+                'description' => 'Default setup raw materials',
+                'is_active' => true,
+            ]
+        );
+
+        $defaultItems = [
+            'Fish meal',
+            'Poultry meal',
+            'Meat meal',
+            'Feather meal',
+            'GNC',
+            'Soya meal',
+            'Roshela',
+            'Wheat offal',
+            'PKC',
+            'Rice bran',
+            'Wheat flour',
+            'Soya oil',
+            'Creeps',
+            'Cassava flour',
+            'Local bloodmeal',
+            'Palamu',
+            'Cassava peel',
+            'Bone meal',
+            'Concentrate premix',
+            'Champremix',
+            'Vitamin C',
+            'Lysine',
+            'Enzymes',
+            'Bio-vit',
+            'Toxin binder',
+            'Salt',
+            'Venor',
+            'Vitranor',
+            'Garri',
+            'Imported Bloodmeal',
+            'Fishmeal 72%',
+        ];
+
+        $items = collect($customItems ?? $defaultItems)
+            ->map(fn ($item) => trim((string) $item))
+            ->filter(fn ($item) => $item !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach ($items as $index => $name) {
+            $existingProduct = DB::table('products')
+                ->where('tenant_id', $tenantId)
+                ->where('name', $name)
+                ->first();
+
+            $payload = [
+                'sku' => sprintf('RM-%d-%03d', $tenantId, $index + 1),
+                'category_id' => $category->id,
+                'inventory_type' => 'raw_material',
+                'unit_of_measure' => str_contains(strtolower($name), 'oil') ? 'litres' : 'kg',
+                'cost_price' => 0,
+                'selling_price' => 0,
+                'reorder_level' => 0,
+                'critical_level' => 0,
+                'is_active' => true,
+                'track_inventory' => true,
+                'updated_at' => now(),
+            ];
+
+            if ($existingProduct) {
+                DB::table('products')->where('id', $existingProduct->id)->update($payload);
+                $productId = $existingProduct->id;
+            } else {
+                $productId = DB::table('products')->insertGetId([
+                    'tenant_id' => $tenantId,
+                    'name' => $name,
+                    ...$payload,
+                    'created_at' => now(),
+                ]);
+            }
+
+            if ($warehouseId) {
+                $existingInventory = DB::table('inventory')
+                    ->where('product_id', $productId)
+                    ->where('warehouse_id', $warehouseId)
+                    ->first();
+
+                if ($existingInventory) {
+                    DB::table('inventory')
+                        ->where('id', $existingInventory->id)
+                        ->update([
+                            'tenant_id' => $tenantId,
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    DB::table('inventory')->insert([
+                        'product_id' => $productId,
+                        'warehouse_id' => $warehouseId,
+                        'tenant_id' => $tenantId,
+                        'quantity' => 0,
+                        'reserved_quantity' => 0,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+        }
     }
 }

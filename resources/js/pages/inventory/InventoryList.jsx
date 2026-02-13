@@ -61,6 +61,8 @@ export default function InventoryList() {
 
     // Delete confirmation state
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, product: null });
+    const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
+    const [deletingAll, setDeletingAll] = useState(false);
 
     const [productForm, setProductForm] = useState({
         name: '', sku: '', category_id: '', inventory_type: 'raw_material', unit: 'kg',
@@ -345,6 +347,26 @@ export default function InventoryList() {
         }
     };
 
+    const handleDeleteAll = () => {
+        setDeleteAllConfirm(true);
+    };
+
+    const confirmDeleteAll = async () => {
+        try {
+            setDeletingAll(true);
+            const result = await productAPI.deleteAllProducts('Bulk delete all products');
+            toast.success(result.message || 'Products deleted successfully');
+            setDeleteAllConfirm(false);
+            fetchInventory();
+            fetchAllProducts();
+            fetchStats();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to delete products');
+        } finally {
+            setDeletingAll(false);
+        }
+    };
+
     const getStockBadge = (status) => ({ in_stock: 'approved', low_stock: 'pending', critical: 'rejected', out_of_stock: 'rejected' }[status] || 'draft');
     const getStockLabel = (status) => ({ in_stock: 'In Stock', low_stock: 'Low Stock', critical: 'Critical', out_of_stock: 'Out of Stock' }[status] || status);
 
@@ -451,6 +473,7 @@ export default function InventoryList() {
                     <Button variant="outline" onClick={() => setShowCategories(true)}>Categories</Button>
                     <Button variant="outline" onClick={() => setShowUnits(true)}>Units</Button>
                     <Button variant="outline" onClick={() => setShowAdjustment(true)}>Stock Adjustment</Button>
+                    <Button variant="danger" onClick={handleDeleteAll}>Delete All</Button>
                 </div>
             </div>
 
@@ -928,6 +951,17 @@ export default function InventoryList() {
                 title="Delete Product"
                 message={`Are you sure you want to delete "${deleteConfirm.product?.name}"?\n\nThis will remove the product and all its inventory records. This action cannot be undone.`}
                 confirmText="Delete Product"
+                cancelText="Cancel"
+                variant="danger"
+            />
+
+            <ConfirmModal
+                isOpen={deleteAllConfirm}
+                onClose={() => !deletingAll && setDeleteAllConfirm(false)}
+                onConfirm={confirmDeleteAll}
+                title="Delete All Products"
+                message="Are you sure you want to delete all products with zero stock?\n\nProducts currently in use or with inventory will be skipped. This action cannot be undone."
+                confirmText={deletingAll ? 'Deleting...' : 'Delete All'}
                 cancelText="Cancel"
                 variant="danger"
             />

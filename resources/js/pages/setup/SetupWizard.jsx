@@ -16,8 +16,8 @@ const STEP_LABELS = [
     'Warehouses & Locations',
     'Departments',
     'Products & Units',
+    'Default Products',
     'Admin Account',
-    'Review & Launch',
 ];
 
 const DEFAULT_DEPARTMENTS = [
@@ -53,6 +53,40 @@ const DEFAULT_UNITS = [
     { name: 'Drum (200L)', abbreviation: 'drums (200L)' },
     { name: 'Piece', abbreviation: 'pieces' },
     { name: 'Carton', abbreviation: 'cartons' },
+];
+
+const DEFAULT_SETUP_PRODUCTS = [
+    'Fish meal',
+    'Poultry meal',
+    'Meat meal',
+    'Feather meal',
+    'GNC',
+    'Soya meal',
+    'Roshela',
+    'Wheat offal',
+    'PKC',
+    'Rice bran',
+    'Wheat flour',
+    'Soya oil',
+    'Creeps',
+    'Cassava flour',
+    'Local bloodmeal',
+    'Palamu',
+    'Cassava peel',
+    'Bone meal',
+    'Concentrate premix',
+    'Champremix',
+    'Vitamin C',
+    'Lysine',
+    'Enzymes',
+    'Bio-vit',
+    'Toxin binder',
+    'Salt',
+    'Venor',
+    'Vitranor',
+    'Garri',
+    'Imported Bloodmeal',
+    'Fishmeal 72%',
 ];
 
 const MONTHS = [
@@ -613,12 +647,89 @@ function StepAdminAccount({ data, onChange }) {
             <p className="text-xs text-slate-400 mt-8">
                 You can create additional users and assign roles after setup.
             </p>
+
+        </div>
+    );
+}
+
+function StepDefaultProducts({ items, onChange }) {
+    const addItem = () => onChange([...(items || []), '']);
+    const removeItem = (idx) => onChange((items || []).filter((_, i) => i !== idx));
+    const updateItem = (idx, value) => {
+        const next = [...(items || [])];
+        next[idx] = value;
+        onChange(next);
+    };
+    const deleteAll = () => onChange([]);
+    const resetDefaults = () => onChange([...DEFAULT_SETUP_PRODUCTS]);
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">Default Products</h2>
+            <p className="text-slate-500 mb-8">
+                These default raw material items will be auto-added on setup completion.
+            </p>
+
+            <Card>
+                <CardBody>
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <button
+                            type="button"
+                            onClick={addItem}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                        >
+                            <PlusIcon /> Add Item
+                        </button>
+                        <button
+                            type="button"
+                            onClick={deleteAll}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                        >
+                            <TrashIcon /> Delete All
+                        </button>
+                        <button
+                            type="button"
+                            onClick={resetDefaults}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                        >
+                            Reset Defaults
+                        </button>
+                    </div>
+
+                    <div className="max-h-[420px] overflow-y-auto pr-2">
+                        <div className="space-y-2">
+                            {(items || []).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        className={inputClass}
+                                        placeholder="Product name"
+                                        value={item}
+                                        onChange={(e) => updateItem(idx, e.target.value)}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeItem(idx)}
+                                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                                        title="Remove"
+                                    >
+                                        <TrashIcon />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-4">
+                        You can customize this list now. Empty names are ignored during setup.
+                    </p>
+                </CardBody>
+            </Card>
         </div>
     );
 }
 
 function StepReview({ wizardData }) {
-    const { company, business, warehouses, departments, categories, units, admin } = wizardData;
+    const { company, business, warehouses, departments, categories, units, admin, defaultProducts } = wizardData;
 
     const summaryCards = [
         {
@@ -653,6 +764,7 @@ function StepReview({ wizardData }) {
             items: [
                 { label: 'Categories', value: categories.filter(Boolean).length },
                 { label: 'Units', value: units.filter((u) => u.name).length },
+                { label: 'Default Items', value: (defaultProducts || []).filter(Boolean).length },
             ],
         },
         {
@@ -690,6 +802,26 @@ function StepReview({ wizardData }) {
                     </Card>
                 ))}
             </div>
+
+            <Card className="mb-8">
+                <CardBody>
+                    <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                        Default Raw Material Items (Auto-added on setup completion)
+                    </h4>
+                    <div className="max-h-52 overflow-y-auto pr-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {DEFAULT_SETUP_PRODUCTS.map((item) => (
+                                <div key={item} className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+                                    {item}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-3">
+                        If you don’t need them later, use Inventory → Delete All.
+                    </p>
+                </CardBody>
+            </Card>
 
             <div className="text-center p-6 bg-green-50 border border-green-200 rounded-xl">
                 <svg className="w-12 h-12 mx-auto text-green-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -736,6 +868,7 @@ export default function SetupWizard() {
         departments: DEFAULT_DEPARTMENTS.map((name) => ({ name, code: generateCode(name) })),
         categories: [...DEFAULT_CATEGORIES],
         units: [...DEFAULT_UNITS],
+        defaultProducts: [...DEFAULT_SETUP_PRODUCTS],
         admin: {
             fullName: '',
             email: '',
@@ -753,7 +886,7 @@ export default function SetupWizard() {
         switch (currentStep) {
             case 0:
                 return wizardData.company.companyName.trim() !== '';
-            case 5: {
+            case 6: {
                 const a = wizardData.admin;
                 return (
                     a.fullName.trim() !== '' &&
@@ -803,6 +936,7 @@ export default function SetupWizard() {
                 products: {
                     categories: wizardData.categories.filter(c => c && c.trim() !== ''),
                     units: wizardData.units.filter(u => u.name && u.name.trim() !== ''),
+                    default_items: wizardData.defaultProducts.filter(p => p && p.trim() !== ''),
                 },
                 admin: {
                     name: wizardData.admin.fullName,
@@ -875,9 +1009,9 @@ export default function SetupWizard() {
                     />
                 );
             case 5:
-                return <StepAdminAccount data={wizardData.admin} onChange={(v) => updateField('admin', v)} />;
+                return <StepDefaultProducts items={wizardData.defaultProducts} onChange={(v) => updateField('defaultProducts', v)} />;
             case 6:
-                return <StepReview wizardData={wizardData} />;
+                return <StepAdminAccount data={wizardData.admin} onChange={(v) => updateField('admin', v)} />;
             default:
                 return null;
         }

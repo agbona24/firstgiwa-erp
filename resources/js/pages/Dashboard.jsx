@@ -84,7 +84,7 @@ export default function Dashboard() {
                 ]);
                 
                 setInventory(inventoryRes.data || []);
-                if (kpiRes.data) setKpiData(kpiRes.data);
+                if (kpiRes.data && kpiRes.data.revenue) setKpiData(prev => ({ ...prev, ...kpiRes.data }));
                 if (todayRes.data) setTodayStats(prev => ({ ...prev, ...todayRes.data }));
                 setSalesTrendData(salesTrendRes.data || []);
                 setRevenueExpensesData(revenueExpensesRes.data || []);
@@ -92,7 +92,7 @@ export default function Dashboard() {
                 setRecentActivities(activitiesRes.data || []);
                 setCreditAlerts(creditAlertsRes.data || []);
                 setPendingItems(pendingItemsRes.data || []);
-                if (plSummaryRes.data) setPlSummary(plSummaryRes.data);
+                if (plSummaryRes.data && plSummaryRes.data.month) setPlSummary(prev => ({ ...prev, ...plSummaryRes.data }));
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
             } finally {
@@ -177,10 +177,10 @@ export default function Dashboard() {
                         <CardBody>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-slate-500">Revenue ({kpiData.revenue.month})</p>
-                                    <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(kpiData.revenue.amount)}</p>
-                                    <p className={`text-sm mt-1 font-medium ${kpiData.revenue.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {kpiData.revenue.change >= 0 ? '+' : ''}{kpiData.revenue.change}% vs last month
+                                    <p className="text-sm font-medium text-slate-500">Revenue ({kpiData.revenue?.month || ''})</p>
+                                    <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(kpiData.revenue?.amount || 0)}</p>
+                                    <p className={`text-sm mt-1 font-medium ${(kpiData.revenue?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {(kpiData.revenue?.change || 0) >= 0 ? '+' : ''}{kpiData.revenue?.change || 0}% vs last month
                                     </p>
                                 </div>
                                 <div className="p-3 bg-blue-100 rounded-xl">
@@ -197,8 +197,8 @@ export default function Dashboard() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">Production Output</p>
-                                    <p className="text-2xl font-bold text-slate-900 mt-1">{kpiData.production.output.toLocaleString()} kg</p>
-                                    <p className="text-sm text-slate-500 mt-1">Avg loss: {kpiData.production.avg_loss}%</p>
+                                    <p className="text-2xl font-bold text-slate-900 mt-1">{(kpiData.production?.output || 0).toLocaleString()} kg</p>
+                                    <p className="text-sm text-slate-500 mt-1">Avg loss: {kpiData.production?.avg_loss || 0}%</p>
                                 </div>
                                 <div className="p-3 bg-green-100 rounded-xl">
                                     <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
@@ -214,8 +214,8 @@ export default function Dashboard() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-slate-500">Outstanding Receivables</p>
-                                    <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(kpiData.receivables.amount)}</p>
-                                    <p className="text-sm text-red-600 mt-1 font-medium">{kpiData.receivables.overdue_count} overdue</p>
+                                    <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(kpiData.receivables?.amount || 0)}</p>
+                                    <p className="text-sm text-red-600 mt-1 font-medium">{kpiData.receivables?.overdue_count || 0} overdue</p>
                                 </div>
                                 <div className="p-3 bg-orange-100 rounded-xl">
                                     <svg className="w-7 h-7 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -230,9 +230,9 @@ export default function Dashboard() {
                         <CardBody>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-medium text-slate-500">Expenses ({kpiData.revenue.month})</p>
-                                    <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(kpiData.expenses.amount)}</p>
-                                    <p className="text-sm text-orange-600 mt-1 font-medium">{kpiData.expenses.pending_count} pending approval</p>
+                                    <p className="text-sm font-medium text-slate-500">Expenses ({kpiData.revenue?.month || ''})</p>
+                                    <p className="text-2xl font-bold text-slate-900 mt-1">{fmt(kpiData.expenses?.amount || 0)}</p>
+                                    <p className="text-sm text-orange-600 mt-1 font-medium">{kpiData.expenses?.pending_count || 0} pending approval</p>
                                 </div>
                                 <div className="p-3 bg-purple-100 rounded-xl">
                                     <svg className="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -279,7 +279,7 @@ export default function Dashboard() {
                             <p className="text-xs text-slate-500 mt-1">Prod. Runs</p>
                         </div>
                         <div className="text-center p-3 bg-white rounded-lg border border-slate-200">
-                            <p className="text-2xl font-bold text-teal-700">{todayStats.production_output.toLocaleString()} kg</p>
+                            <p className="text-2xl font-bold text-teal-700">{(todayStats.production_output || 0).toLocaleString()} kg</p>
                             <p className="text-xs text-slate-500 mt-1">Output</p>
                         </div>
                     </div>

@@ -55,6 +55,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('install')->group(function () {
         Route::get('/status', [InstallController::class, 'checkInstallStatus']);
         Route::get('/requirements', [InstallController::class, 'checkRequirements']);
+        Route::get('/database-status', [InstallController::class, 'checkDatabaseStatus']);
         Route::post('/test-database', [InstallController::class, 'testDatabaseConnection']);
         Route::post('/save-database', [InstallController::class, 'saveDatabaseConfig']);
         Route::post('/migrate', [InstallController::class, 'runMigrations']);
@@ -96,6 +97,14 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{id}', [NotificationController::class, 'destroy']);
         });
 
+        // Push Notifications
+        Route::prefix('push')->group(function () {
+            Route::get('/vapid-key', [\App\Http\Controllers\Api\PushNotificationController::class, 'getVapidKey']);
+            Route::post('/subscribe', [\App\Http\Controllers\Api\PushNotificationController::class, 'subscribe']);
+            Route::post('/unsubscribe', [\App\Http\Controllers\Api\PushNotificationController::class, 'unsubscribe']);
+            Route::post('/test', [\App\Http\Controllers\Api\PushNotificationController::class, 'test']);
+        });
+
         // Branches (quick access for branch selector)
         Route::get('/branches', [SettingsBranchController::class, 'index']);
 
@@ -105,6 +114,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/stock/critical', [ProductController::class, 'criticalStock']);
             Route::get('/raw-materials', [ProductController::class, 'rawMaterials']);
             Route::get('/finished-goods', [ProductController::class, 'finishedGoods']);
+            Route::delete('/bulk/delete-all', [ProductController::class, 'deleteAll']);
+            Route::delete('/bulk/delete', [ProductController::class, 'bulkDelete']);
             Route::post('/{product}/activate', [ProductController::class, 'activate']);
             Route::post('/{product}/deactivate', [ProductController::class, 'deactivate']);
         });

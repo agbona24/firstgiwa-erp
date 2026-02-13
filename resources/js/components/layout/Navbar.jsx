@@ -6,6 +6,7 @@ import { notificationAPI } from '../../services/notificationAPI';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
+import { OnlineStatusBadge } from '../PWAComponents';
 
 export default function Navbar({ onMenuClick }) {
     const { user, logout } = useAuth();
@@ -287,6 +288,9 @@ export default function Navbar({ onMenuClick }) {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Online Status Badge */}
+                            <OnlineStatusBadge className="hidden sm:flex" />
 
                             {/* Mobile search */}
                             <button

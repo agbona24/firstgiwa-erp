@@ -204,4 +204,67 @@ class ProductController extends Controller
             'product' => $updated,
         ]);
     }
+
+    /**
+     * Delete all products (bulk delete).
+     */
+    public function deleteAll(Request $request): JsonResponse
+    {
+        // Check permission
+        if (!$request->user()->hasPermission('products.delete')) {
+            return response()->json([
+                'message' => 'You do not have permission to delete products.',
+            ], 403);
+        }
+
+        try {
+            $reason = $request->input('reason', 'Bulk delete all products');
+            $count = $this->productService->deleteAll($reason);
+
+            return response()->json([
+                'message' => "Successfully deleted {$count} products",
+                'deleted_count' => $count,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Bulk delete selected products.
+     */
+    public function bulkDelete(Request $request): JsonResponse
+    {
+        // Check permission
+        if (!$request->user()->hasPermission('products.delete')) {
+            return response()->json([
+                'message' => 'You do not have permission to delete products.',
+            ], 403);
+        }
+
+        $ids = $request->input('ids', []);
+        if (empty($ids)) {
+            return response()->json([
+                'message' => 'No products selected for deletion.',
+            ], 422);
+        }
+
+        try {
+            $reason = $request->input('reason', 'Bulk delete selected products');
+            $result = $this->productService->bulkDelete($ids, $reason);
+
+            return response()->json([
+                'message' => "Successfully deleted {$result['deleted']} products",
+                'deleted_count' => $result['deleted'],
+                'failed_count' => $result['failed'],
+                'errors' => $result['errors'] ?? [],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
 }

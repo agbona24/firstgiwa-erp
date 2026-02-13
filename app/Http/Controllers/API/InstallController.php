@@ -193,9 +193,32 @@ class InstallController extends Controller
             $dotenv = \Dotenv\Dotenv::createImmutable(base_path());
             $dotenv->load();
 
-            // Run migrations
-            Artisan::call('migrate', ['--force' => true]);
-            $migrateOutput = Artisan::output();
+            // Check if fresh install is requested (wipe existing tables)
+            $freshInstall = $request->boolean('fresh', false);
+            
+            if ($freshInstall) {
+                // Drop all tables and re-run migrations
+                Artisan::call('migrate:fresh', ['--force' => true]);
+                $migrateOutput = Artisan::output();
+            } else {
+                // Check for existing tables that might cause conflicts
+                $existingTables = $this->getExistingTables();
+                
+                if (!empty($existingTables) && !in_array('migrations', $existingTables)) {
+                    // Tables exist but no migrations table - corrupted state
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'The database contains existing tables but no migration history. This indicates a previous incomplete installation.',
+                        'existing_tables' => count($existingTables),
+                        'requires_fresh' => true,
+                        'action_required' => 'Please use the "Fresh Install" option to clear existing tables, or manually empty the database.',
+                    ], 409);
+                }
+                
+                // Run normal migrations
+                Artisan::call('migrate', ['--force' => true]);
+                $migrateOutput = Artisan::output();
+            }
 
             // Run seeders for essential data (roles, permissions, etc.)
             Artisan::call('db:seed', ['--class' => 'RolePermissionSeeder', '--force' => true]);
@@ -214,9 +237,132 @@ class InstallController extends Controller
                 'output' => $migrateOutput,
             ]);
         } catch (\Exception $e) {
+            $errorMessage = $e->getMessage();
+            $userFriendlyMessage = $this->parseDbMigrationError($errorMessage);
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Migration failed: ' . $e->getMessage(),
+                'message' => $userFriendlyMessage,
+                'technical_details' => $errorMessage,
+            ], 500);
+        }
+    }
+
+    /**
+     * Parse database migration errors and return user-friendly messages
+     */
+    private function parseDbMigrationError(string $errorMessage): string
+    {
+        // Table already exists (SQLSTATE 42S01)
+        if (str_contains($errorMessage, '42S01') || str_contains($errorMessage, 'already exists')) {
+            // Extract table name if possible
+            if (preg_match("/Table '([^']+)' already exists/", $errorMessage, $matches)) {
+                $tableName = $matches[1];
+                return "The database already contains existing tables (e.g., '{$tableName}'). It appears this application was previously installed. Please use an empty database or clear the existing tables before running the installer.";
+            }
+            return "The database already contains existing tables. It appears this application was previously installed. Please use an empty database or clear the existing tables before running the installer.";
+        }
+
+        // Foreign key reference error (SQLSTATE HY000, error 1824)
+        if (str_contains($errorMessage, '1824') || str_contains($errorMessage, 'Failed to open the referenced table')) {
+            if (preg_match("/referenced table '([^']+)'/", $errorMessage, $matches)) {
+                $tableName = $matches[1];
+                return "Migration failed: The table '{$tableName}' is required but doesn't exist. This may indicate corrupted migration state. Please clear all tables and try again, or contact support.";
+            }
+            return "Migration failed due to a missing referenced table. Please clear all tables and try again with an empty database.";
+        }
+
+        // Foreign key constraint error (SQLSTATE 23000)
+        if (str_contains($errorMessage, '23000') || str_contains($errorMessage, 'foreign key constraint')) {
+            return "Migration failed due to a foreign key constraint issue. Please ensure the database is empty before running the installer.";
+        }
+
+        // Access denied (SQLSTATE 42000 or 28000)
+        if (str_contains($errorMessage, '42000') || str_contains($errorMessage, '28000') || str_contains($errorMessage, 'Access denied')) {
+            return "Database access denied. Please verify your database username and password are correct and have sufficient privileges.";
+        }
+
+        // Connection refused
+        if (str_contains($errorMessage, 'Connection refused') || str_contains($errorMessage, 'SQLSTATE[HY000] [2002]')) {
+            return "Could not connect to the database server. Please verify the database host and port are correct and the server is running.";
+        }
+
+        // Unknown database (SQLSTATE 42000, error 1049)
+        if (str_contains($errorMessage, '1049') || str_contains($errorMessage, 'Unknown database')) {
+            return "The specified database does not exist. Please create the database first or verify the database name is correct.";
+        }
+
+        // Syntax error
+        if (str_contains($errorMessage, 'syntax error') || str_contains($errorMessage, '42000')) {
+            return "A database syntax error occurred. This may be a compatibility issue. Please contact support with the technical details.";
+        }
+
+        // Default fallback
+        return "Migration failed: " . $errorMessage;
+    }
+
+    /**
+     * Get list of existing tables in the database
+     */
+    private function getExistingTables(): array
+    {
+        try {
+            $connection = config('database.default');
+            $database = config("database.connections.{$connection}.database");
+            
+            if ($connection === 'mysql') {
+                $tables = DB::select('SHOW TABLES');
+                $key = "Tables_in_{$database}";
+                return array_map(fn($table) => $table->$key, $tables);
+            } elseif ($connection === 'pgsql') {
+                $tables = DB::select("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+                return array_map(fn($table) => $table->tablename, $tables);
+            } elseif ($connection === 'sqlite') {
+                $tables = DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+                return array_map(fn($table) => $table->name, $tables);
+            }
+            
+            return [];
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Check database status for installer
+     */
+    public function checkDatabaseStatus()
+    {
+        try {
+            $existingTables = $this->getExistingTables();
+            $hasMigrationsTable = in_array('migrations', $existingTables);
+            $tableCount = count($existingTables);
+            
+            $status = 'empty';
+            $message = 'Database is empty and ready for installation.';
+            
+            if ($tableCount > 0) {
+                if ($hasMigrationsTable) {
+                    $status = 'has_migrations';
+                    $message = "Database contains {$tableCount} tables with migration history. You can run migrations to update.";
+                } else {
+                    $status = 'corrupted';
+                    $message = "Database contains {$tableCount} tables but no migration history. A fresh install is required.";
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'status' => $status,
+                'message' => $message,
+                'table_count' => $tableCount,
+                'has_migrations_table' => $hasMigrationsTable,
+                'requires_fresh' => $status === 'corrupted',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not check database status: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -331,22 +477,30 @@ class InstallController extends Controller
      */
     private function isInstalled(): bool
     {
+        // Check APP_INSTALLED env variable
+        $appInstalled = env('APP_INSTALLED', false);
+        
+        // If explicitly false or 'false', not installed
+        if ($appInstalled === false || $appInstalled === 'false') {
+            return false;
+        }
+        
+        // If APP_INSTALLED=true, verify database is actually set up
         try {
-            // Check if migrations table exists and has entries
+            // Check if migrations table exists
             if (!Schema::hasTable('migrations')) {
                 return false;
             }
             
             // Check if essential tables exist
-            $essentialTables = ['users', 'tenants', 'roles', 'permissions'];
+            $essentialTables = ['roles', 'permissions'];
             foreach ($essentialTables as $table) {
                 if (!Schema::hasTable($table)) {
                     return false;
                 }
             }
             
-            // Check for installed marker in storage
-            return File::exists(storage_path('installed'));
+            return true;
         } catch (\Exception $e) {
             return false;
         }
@@ -357,7 +511,17 @@ class InstallController extends Controller
      */
     private function markAsInstalled(): void
     {
-        File::put(storage_path('installed'), now()->toIso8601String());
+        // Update APP_INSTALLED in .env file
+        $envPath = base_path('.env');
+        
+        if (File::exists($envPath)) {
+            $envContent = File::get($envPath);
+            $envContent = $this->updateEnvValue($envContent, 'APP_INSTALLED', 'true');
+            File::put($envPath, $envContent);
+            
+            // Clear config cache
+            Artisan::call('config:clear');
+        }
     }
 
     /**

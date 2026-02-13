@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Web Push Notifications
+    |--------------------------------------------------------------------------
+    |
+    | VAPID keys for Web Push notifications. Generate keys using:
+    | npx web-push generate-vapid-keys
+    |
+    */
+    'webpush' => [
+        'vapid_public_key' => env('VAPID_PUBLIC_KEY'),
+        'vapid_private_key' => env('VAPID_PRIVATE_KEY'),
+        'vapid_subject' => env('VAPID_SUBJECT', 'mailto:admin@factorypulse.com'),
+    ],
+
 ];

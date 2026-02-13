@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('customers', function (Blueprint $table) {
-            $table->enum('customer_type', ['cash', 'credit', 'both'])->default('cash')->after('phone');
+            $table->enum('customer_type', ['cash', 'credit', 'both', 'wholesale', 'retail', 'distributor'])->default('cash')->after('phone');
             $table->boolean('credit_blocked')->default(false)->after('outstanding_balance');
         });
     }
