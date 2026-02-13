@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             // Products & Inventory
             ProductSeeder::class,
             WarehouseSeeder::class,
+            InventorySeeder::class,
             
             // Business Partners
             CustomerSeeder::class,
