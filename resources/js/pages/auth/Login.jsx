@@ -256,7 +256,7 @@ export default function Login() {
                         </button>
                     </form>
 
-                    {/* Demo accounts */}
+                    {/* Demo accounts - commented out for production
                     <div className="mt-8">
                         <div className="relative">
                             <div className="absolute inset-0 flex items-center">
@@ -280,6 +280,7 @@ export default function Login() {
                             ))}
                         </div>
                     </div>
+                    */}
 
                     {/* Footer */}
                     <p className="text-center text-xs text-slate-400 mt-8">
