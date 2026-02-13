@@ -19,6 +19,8 @@ use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class POSController extends Controller
 {
@@ -85,7 +87,7 @@ class POSController extends Controller
                 'price' => (float) $product->selling_price,
                 'cost_price' => (float) $product->cost_price,
                 'stock' => $stock,
-                'category' => $product->category?->slug ?? 'uncategorized',
+                'category' => $product->category?->code ?? 'uncategorized',
                 'category_id' => $product->category_id,
                 'category_name' => $product->category?->name ?? 'Uncategorized',
                 'lowStockThreshold' => $lowStockThreshold,
@@ -104,16 +106,43 @@ class POSController extends Controller
      */
     public function categories(Request $request)
     {
-        $tenantId = Auth::user()->tenant_id;
+        $tenantId = Auth::user()?->tenant_id;
 
-        $categories = Category::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+        // Use query builder to be resilient when tenant/category schema differs across environments.
+        $query = DB::table('categories');
+
+        if ($tenantId && Schema::hasColumn('categories', 'tenant_id')) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        if (Schema::hasColumn('categories', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        if (Schema::hasColumn('categories', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        if (Schema::hasColumn('categories', 'name')) {
+            $query->orderBy('name');
+        }
+
+        $select = ['id', 'name'];
+        if (Schema::hasColumn('categories', 'code')) {
+            $select[] = 'code';
+        }
+
+        $categories = $query->get($select)->map(function ($category) {
+            return [
+                'id' => $category->id,
+                'name' => $category->name,
+                'code' => $category->code ?? (string) $category->id,
+            ];
+        });
 
         // Add "All Products" as first option
         $result = collect([
-            ['id' => 'all', 'name' => 'All Products', 'slug' => 'all']
+            ['id' => 'all', 'name' => 'All Products', 'code' => 'all']
         ])->concat($categories);
 
         return response()->json([
@@ -374,7 +403,7 @@ class POSController extends Controller
                 ]);
             } catch (\Exception $e) {
                 // Log notification error but don't fail the sale
-                \Log::warning('Failed to create POS sale notification: ' . $e->getMessage());
+                Log::warning('Failed to create POS sale notification: ' . $e->getMessage());
             }
 
             // Prepare receipt data
