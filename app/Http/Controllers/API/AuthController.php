@@ -51,9 +51,12 @@ class AuthController extends Controller
             AuditLog::logLogin($user);
 
             $token = $user->createToken('auth-token')->plainTextToken;
+            $user->load('roles.permissions');
 
             return response()->json([
-                'user' => $user,
+                'user' => array_merge($user->toArray(), [
+                    'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                ]),
                 'token' => $token,
                 'message' => 'Login successful'
             ]);
@@ -88,9 +91,12 @@ class AuthController extends Controller
         AuditLog::logLogin($user);
 
         $token = $user->createToken('auth-token')->plainTextToken;
+        $user->load('roles.permissions');
 
         return response()->json([
-            'user' => $user,
+            'user' => array_merge($user->toArray(), [
+                'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+            ]),
             'token' => $token,
             'message' => 'Login successful'
         ]);
@@ -118,8 +124,13 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
+        $user = $request->user();
+        $user->load('roles.permissions');
+
         return response()->json([
-            'user' => $request->user()
+            'user' => array_merge($user->toArray(), [
+                'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+            ]),
         ]);
     }
 }
