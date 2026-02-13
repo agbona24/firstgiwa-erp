@@ -16,6 +16,7 @@ import { PWAInstallBanner, OfflineIndicator, UpdateBanner } from './components/P
 import SetupWizard from './pages/setup/SetupWizard';
 import InstallWizard from './pages/install/InstallWizard';
 import ErrorBoundary from './components/ErrorBoundary';
+import PermissionGuard from './components/PermissionGuard';
 import TutorialCenter from './pages/TutorialCenter';
 import { checkSetupStatus } from './services/setupAPI';
 
@@ -148,45 +149,64 @@ function App() {
 
                     {/* Protected Routes with Layout */}
                     <Route element={user ? <AppLayout /> : <Navigate to="/login" replace />}>
+                        {/* Dashboard - accessible to all authenticated users */}
                         <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-                        <Route path="/inventory" element={<ErrorBoundary><InventoryList /></ErrorBoundary>} />
-                        <Route path="/purchase-orders" element={<PurchaseOrderList />} />
-                        <Route path="/sales-orders" element={<SalesOrderList />} />
-                        <Route path="/pos" element={<POSTerminal />} />
-                        <Route path="/pos/reports" element={<SessionReports />} />
-                        <Route path="/payments" element={<PaymentList />} />
-                        <Route path="/users" element={<UserList />} />
-                        <Route path="/accounting" element={<TransactionLedger />} />
-                        <Route path="/accounting/balance-sheet" element={<BalanceSheet />} />
-                        <Route path="/accounting/vat-report" element={<VATReport />} />
-                        <Route path="/assets" element={<AssetList />} />
-                        <Route path="/audit" element={<AuditLog />} />
-                        <Route path="/customers" element={<CustomerList />} />
-                        <Route path="/suppliers" element={<SupplierList />} />
-                        <Route path="/formulas" element={<ErrorBoundary><FormulaList /></ErrorBoundary>} />
-                        <Route path="/production" element={<ProductionList />} />
-                        <Route path="/production/dashboard" element={<ProductionDashboard />} />
-                        <Route path="/production/new" element={<CreateProductionRun />} />
-                        <Route path="/expenses" element={<ExpenseList />} />
-                        <Route path="/staff" element={<StaffList />} />
-                        <Route path="/payroll" element={<PayrollList />} />
-                        <Route path="/profit-loss" element={<ProfitAndLoss />} />
-                        <Route path="/credit-facility" element={<CreditFacilityList />} />
-                        <Route path="/credit-payments" element={<CreditPayments />} />
-                        <Route path="/sales-orders/create" element={<CreateBooking />} />
-                        <Route path="/customers/:id/ledger" element={<CustomerLedger />} />
-                        <Route path="/payments/collect" element={<CollectPayment />} />
-                        <Route path="/purchase-orders/create" element={<CreatePurchaseOrder />} />
-                        <Route path="/purchase-orders/receive" element={<ReceiveDelivery />} />
-                        <Route path="/production/create" element={<CreateProductionRun />} />
-                        <Route path="/production/edit/:id" element={<EditProductionRun />} />
-                        <Route path="/expenses/create" element={<CreateExpense />} />
-                        <Route path="/staff/:id" element={<StaffProfile />} />
-                        <Route path="/payroll/process" element={<ProcessPayroll />} />
-                        <Route path="/vat-report" element={<VATReport />} />
                         <Route path="/notifications" element={<Notifications />} />
                         <Route path="/tutorials" element={<TutorialCenter />} />
-                        <Route path="/settings" element={<Settings />} />
+
+                        {/* Inventory */}
+                        <Route path="/inventory" element={<PermissionGuard permissions={['inventory.view']}><ErrorBoundary><InventoryList /></ErrorBoundary></PermissionGuard>} />
+
+                        {/* Purchase Orders */}
+                        <Route path="/purchase-orders" element={<PermissionGuard permissions={['purchases.view']}><PurchaseOrderList /></PermissionGuard>} />
+                        <Route path="/purchase-orders/create" element={<PermissionGuard permissions={['purchases.create']}><CreatePurchaseOrder /></PermissionGuard>} />
+                        <Route path="/purchase-orders/receive" element={<PermissionGuard permissions={['purchases.create']}><ReceiveDelivery /></PermissionGuard>} />
+
+                        {/* Sales Orders */}
+                        <Route path="/sales-orders" element={<PermissionGuard permissions={['sales.view']}><SalesOrderList /></PermissionGuard>} />
+                        <Route path="/sales-orders/create" element={<PermissionGuard permissions={['sales.create']}><CreateBooking /></PermissionGuard>} />
+
+                        {/* POS */}
+                        <Route path="/pos" element={<PermissionGuard permissions={['pos.access']}><POSTerminal /></PermissionGuard>} />
+                        <Route path="/pos/reports" element={<PermissionGuard permissions={['pos.access']}><SessionReports /></PermissionGuard>} />
+
+                        {/* Contacts */}
+                        <Route path="/customers" element={<PermissionGuard permissions={['sales.view']}><CustomerList /></PermissionGuard>} />
+                        <Route path="/customers/:id/ledger" element={<PermissionGuard permissions={['sales.view']}><CustomerLedger /></PermissionGuard>} />
+                        <Route path="/suppliers" element={<PermissionGuard permissions={['purchases.view']}><SupplierList /></PermissionGuard>} />
+
+                        {/* Production */}
+                        <Route path="/formulas" element={<PermissionGuard permissions={['production.view']}><ErrorBoundary><FormulaList /></ErrorBoundary></PermissionGuard>} />
+                        <Route path="/production" element={<PermissionGuard permissions={['production.view']}><ProductionList /></PermissionGuard>} />
+                        <Route path="/production/dashboard" element={<PermissionGuard permissions={['production.view']}><ProductionDashboard /></PermissionGuard>} />
+                        <Route path="/production/new" element={<PermissionGuard permissions={['production.create']}><CreateProductionRun /></PermissionGuard>} />
+                        <Route path="/production/create" element={<PermissionGuard permissions={['production.create']}><CreateProductionRun /></PermissionGuard>} />
+                        <Route path="/production/edit/:id" element={<PermissionGuard permissions={['production.create']}><EditProductionRun /></PermissionGuard>} />
+
+                        {/* Finance */}
+                        <Route path="/payments" element={<PermissionGuard permissions={['payments.view']}><PaymentList /></PermissionGuard>} />
+                        <Route path="/payments/collect" element={<PermissionGuard permissions={['payments.create']}><CollectPayment /></PermissionGuard>} />
+                        <Route path="/expenses" element={<PermissionGuard permissions={['expenses.view']}><ExpenseList /></PermissionGuard>} />
+                        <Route path="/expenses/create" element={<PermissionGuard permissions={['expenses.create']}><CreateExpense /></PermissionGuard>} />
+                        <Route path="/credit-facility" element={<PermissionGuard permissions={['payments.view']}><CreditFacilityList /></PermissionGuard>} />
+                        <Route path="/credit-payments" element={<PermissionGuard permissions={['payments.view']}><CreditPayments /></PermissionGuard>} />
+                        <Route path="/accounting" element={<PermissionGuard permissions={['reports.view']}><TransactionLedger /></PermissionGuard>} />
+                        <Route path="/accounting/balance-sheet" element={<PermissionGuard permissions={['reports.view']}><BalanceSheet /></PermissionGuard>} />
+                        <Route path="/accounting/vat-report" element={<PermissionGuard permissions={['reports.view']}><VATReport /></PermissionGuard>} />
+                        <Route path="/profit-loss" element={<PermissionGuard permissions={['reports.view']}><ProfitAndLoss /></PermissionGuard>} />
+                        <Route path="/vat-report" element={<PermissionGuard permissions={['reports.view']}><VATReport /></PermissionGuard>} />
+                        <Route path="/assets" element={<PermissionGuard permissions={['reports.view']}><AssetList /></PermissionGuard>} />
+
+                        {/* HR & Payroll */}
+                        <Route path="/staff" element={<PermissionGuard permissions={['payroll.view']}><StaffList /></PermissionGuard>} />
+                        <Route path="/staff/:id" element={<PermissionGuard permissions={['payroll.view']}><StaffProfile /></PermissionGuard>} />
+                        <Route path="/payroll" element={<PermissionGuard permissions={['payroll.view']}><PayrollList /></PermissionGuard>} />
+                        <Route path="/payroll/process" element={<PermissionGuard permissions={['payroll.create']}><ProcessPayroll /></PermissionGuard>} />
+
+                        {/* Administration */}
+                        <Route path="/users" element={<PermissionGuard permissions={['users.view']}><UserList /></PermissionGuard>} />
+                        <Route path="/settings" element={<PermissionGuard permissions={['settings.view']}><Settings /></PermissionGuard>} />
+                        <Route path="/audit" element={<PermissionGuard permissions={['audit.view']}><AuditLog /></PermissionGuard>} />
                     </Route>
 
                     {/* Root redirect */}
