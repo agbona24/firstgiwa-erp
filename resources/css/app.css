@@ -60,3 +60,32 @@
 * {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Landing Page Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+.animate-slide-up { animation: slide-up 0.8s ease-out forwards; }
+.animate-fade-in { animation: fade-in 0.6s ease-out forwards; }
+
+/* Smooth scroll for landing page */
+html { scroll-behavior: smooth; }

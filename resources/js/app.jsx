@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import Login from './pages/auth/Login';
 import Dashboard from './pages/Dashboard';
 import { useAuth } from './hooks/useAuth';
@@ -19,6 +19,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 import PermissionGuard from './components/PermissionGuard';
 import TutorialCenter from './pages/TutorialCenter';
 import { checkSetupStatus } from './services/setupAPI';
+
+// Lazy-loaded landing page (not bundled with authenticated app)
+const LandingPage = lazy(() => import('./pages/landing/LandingPage'));
 
 // Module Pages
 import InventoryList from './pages/inventory/InventoryList';
@@ -209,10 +212,24 @@ function App() {
                         <Route path="/audit" element={<PermissionGuard permissions={['audit.view']}><AuditLog /></PermissionGuard>} />
                     </Route>
 
-                    {/* Root redirect */}
+                    {/* Root — Landing page for visitors, dashboard for authenticated users */}
                     <Route
                         path="/"
-                        element={<Navigate to={user ? "/dashboard" : "/login"} replace />}
+                        element={
+                            user ? (
+                                <Navigate to="/dashboard" replace />
+                            ) : (
+                                <Suspense fallback={
+                                    <div className="min-h-screen flex items-center justify-center bg-white">
+                                        <div className="text-center">
+                                            <div className="spinner w-12 h-12 mx-auto mb-4"></div>
+                                        </div>
+                                    </div>
+                                }>
+                                    <LandingPage />
+                                </Suspense>
+                            )
+                        }
                     />
 
                     {/* 404 */}
