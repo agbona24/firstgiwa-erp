@@ -366,7 +366,7 @@ class POSController extends Controller
                     'payable_type' => SalesOrder::class,
                     'payable_id' => $salesOrder->id,
                     'customer_id' => $request->customer_id,
-                    'payment_type' => 'received',
+                    'payment_type' => 'receivable',
                     'payment_method' => $request->payment_method,
                     'amount' => $total,
                     'payment_date' => now(),
@@ -873,7 +873,7 @@ class POSController extends Controller
             ->with(['branch', 'user', 'closedByUser']);
 
         // Filter by user (admins can see all)
-        if (!$user->hasRole(['admin', 'super-admin', 'manager'])) {
+        if (!$user->hasRole(['Admin', 'Super Admin', 'Manager'])) {
             $query->where('user_id', $user->id);
         } elseif ($request->filled('user_id')) {
             $query->where('user_id', $request->input('user_id'));
@@ -918,7 +918,7 @@ class POSController extends Controller
             ->findOrFail($sessionId);
 
         // Check permission
-        if (!$user->hasRole(['admin', 'super-admin', 'manager']) && $session->user_id !== $user->id) {
+        if (!$user->hasRole(['Admin', 'Super Admin', 'Manager']) && $session->user_id !== $user->id) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to view this session.',
