@@ -477,11 +477,10 @@ class InstallController extends Controller
      */
     private function isInstalled(): bool
     {
-        // Check APP_INSTALLED env variable
-        $appInstalled = env('APP_INSTALLED', false);
-        
-        // If explicitly false or 'false', not installed
-        if ($appInstalled === false || $appInstalled === 'false') {
+        // Check APP_INSTALLED config value
+        $appInstalled = config('app.installed');
+
+        if (!$appInstalled) {
             return false;
         }
         

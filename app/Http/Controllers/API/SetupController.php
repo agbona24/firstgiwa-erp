@@ -25,10 +25,10 @@ class SetupController extends Controller
      */
     public function checkStatus(): JsonResponse
     {
-        // Check APP_INSTALLED env variable first - if false, should go to /install not /setup
-        $appInstalled = env('APP_INSTALLED', false);
-        
-        if ($appInstalled === false || $appInstalled === 'false') {
+        // Check if app is installed
+        $appInstalled = config('app.installed');
+
+        if (!$appInstalled) {
             return response()->json([
                 'success' => true,
                 'setup_complete' => false,
