@@ -10,6 +10,7 @@ import SlideOut from '../../components/ui/SlideOut';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useToast } from '../../contexts/ToastContext';
 import customerAPI from '../../services/customerAPI';
+import { creditFacilityTypesAPI } from '../../services/settingsAPI';
 import { exportSelectedToCSV } from '../../utils/exportUtils';
 
 const fmt = (n) => window.formatCurrency(n, { minimumFractionDigits: 2 });
@@ -23,16 +24,30 @@ export default function CustomerList() {
     const [statusFilter, setStatusFilter] = useState('');
     const [showCreate, setShowCreate] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [formData, setFormData] = useState({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_limit: '', payment_terms_days: '0', address: '' });
+    const [formData, setFormData] = useState({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_facility_type_id: '', address: '' });
     const [showEdit, setShowEdit] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, customer: null });
     const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState({ isOpen: false, count: 0, indices: [] });
+    const [creditFacilityTypes, setCreditFacilityTypes] = useState([]);
 
     // Fetch customers from API
     useEffect(() => {
         fetchCustomers();
     }, [search, typeFilter, statusFilter]);
+
+    // Fetch credit facility types
+    useEffect(() => {
+        const fetchCreditTypes = async () => {
+            try {
+                const response = await creditFacilityTypesAPI.getAll();
+                setCreditFacilityTypes((response.data?.data || response.data || []).filter(t => t.is_active));
+            } catch (error) {
+                console.error('Error fetching credit facility types:', error);
+            }
+        };
+        fetchCreditTypes();
+    }, []);
 
     const fetchCustomers = async () => {
         try {
@@ -73,7 +88,7 @@ export default function CustomerList() {
             await customerAPI.createCustomer(formData);
             toast.success('Customer created successfully');
             setShowCreate(false);
-            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_limit: '', payment_terms_days: '0', address: '' });
+            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_facility_type_id: '', address: '' });
             fetchCustomers();
         } catch (error) {
             console.error('Error creating customer:', error);
@@ -89,8 +104,7 @@ export default function CustomerList() {
             email: customer.email || '',
             phone: customer.phone || '',
             customer_type: customer.customer_type || 'cash',
-            credit_limit: customer.credit_limit || '',
-            payment_terms_days: customer.payment_terms_days || '0',
+            credit_facility_type_id: customer.credit_facility_type_id || '',
             address: customer.address || '',
         });
         setShowEdit(true);
@@ -103,7 +117,7 @@ export default function CustomerList() {
             toast.success('Customer updated successfully');
             setShowEdit(false);
             setEditingCustomer(null);
-            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_limit: '', payment_terms_days: '0', address: '' });
+            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_facility_type_id: '', address: '' });
             fetchCustomers();
         } catch (error) {
             console.error('Error updating customer:', error);
@@ -337,15 +351,29 @@ export default function CustomerList() {
                         </select>
                     </div>
                     {(formData.customer_type === 'credit' || formData.customer_type === 'both') && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit ({window.getCurrencySymbol()})</label>
-                                <input type="number" value={formData.credit_limit} onChange={(e) => setFormData({...formData, credit_limit: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="0.00" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms (Days)</label>
-                                <input type="number" value={formData.payment_terms_days} onChange={(e) => setFormData({...formData, payment_terms_days: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Credit Facility Type *</label>
+                            <select required value={formData.credit_facility_type_id} onChange={(e) => setFormData({...formData, credit_facility_type_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="">Select Credit Facility Type</option>
+                                {creditFacilityTypes.map((type) => (
+                                    <option key={type.id} value={type.id}>{type.name} — Limit: {fmt(type.default_limit)}, {type.payment_terms_display}</option>
+                                ))}
+                            </select>
+                            {formData.credit_facility_type_id && (() => {
+                                const selectedType = creditFacilityTypes.find(t => t.id == formData.credit_facility_type_id);
+                                if (!selectedType) return null;
+                                return (
+                                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div><span className="text-slate-500">Default Limit:</span> <span className="font-semibold">{fmt(selectedType.default_limit)}</span></div>
+                                            <div><span className="text-slate-500">Max Limit:</span> <span className="font-semibold">{fmt(selectedType.max_limit)}</span></div>
+                                            <div><span className="text-slate-500">Payment Terms:</span> <span className="font-semibold">{selectedType.payment_terms_display}</span></div>
+                                            <div><span className="text-slate-500">Interest Rate:</span> <span className="font-semibold">{selectedType.interest_rate}%</span></div>
+                                        </div>
+                                        {selectedType.description && <p className="mt-1 text-slate-600">{selectedType.description}</p>}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
                     <div>
@@ -542,15 +570,29 @@ export default function CustomerList() {
                         </select>
                     </div>
                     {(formData.customer_type === 'credit' || formData.customer_type === 'both') && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit ({window.getCurrencySymbol()})</label>
-                                <input type="number" value={formData.credit_limit} onChange={(e) => setFormData({...formData, credit_limit: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="0.00" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms (Days)</label>
-                                <input type="number" value={formData.payment_terms_days} onChange={(e) => setFormData({...formData, payment_terms_days: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Credit Facility Type *</label>
+                            <select required value={formData.credit_facility_type_id} onChange={(e) => setFormData({...formData, credit_facility_type_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="">Select Credit Facility Type</option>
+                                {creditFacilityTypes.map((type) => (
+                                    <option key={type.id} value={type.id}>{type.name} — Limit: {fmt(type.default_limit)}, {type.payment_terms_display}</option>
+                                ))}
+                            </select>
+                            {formData.credit_facility_type_id && (() => {
+                                const selectedType = creditFacilityTypes.find(t => t.id == formData.credit_facility_type_id);
+                                if (!selectedType) return null;
+                                return (
+                                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div><span className="text-slate-500">Default Limit:</span> <span className="font-semibold">{fmt(selectedType.default_limit)}</span></div>
+                                            <div><span className="text-slate-500">Max Limit:</span> <span className="font-semibold">{fmt(selectedType.max_limit)}</span></div>
+                                            <div><span className="text-slate-500">Payment Terms:</span> <span className="font-semibold">{selectedType.payment_terms_display}</span></div>
+                                            <div><span className="text-slate-500">Interest Rate:</span> <span className="font-semibold">{selectedType.interest_rate}%</span></div>
+                                        </div>
+                                        {selectedType.description && <p className="mt-1 text-slate-600">{selectedType.description}</p>}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
                     <div>

@@ -6,14 +6,14 @@ export const defaultLandingData = {
             { label: 'Pricing', href: '#pricing' },
             { label: 'Testimonials', href: '#testimonials' },
         ],
-        ctaPrimary: { label: 'Start Free Trial', href: '/setup' },
+        ctaPrimary: { label: 'Start Free Trial', href: '/signup' },
         ctaSecondary: { label: 'Log In', href: '/login' },
     },
     hero: {
         badge: 'Real-Time Manufacturing ERP',
         headline: 'Control Your Factory Floor in Real Time',
         subtext: 'FactoryPulse ERP gives manufacturers complete visibility into production, inventory, sales, and finances — all from one powerful dashboard. Stop guessing, start producing.',
-        ctaPrimary: { label: 'Start Free Trial', href: '/setup' },
+        ctaPrimary: { label: 'Start Free Trial', href: '/signup' },
         ctaSecondary: { label: 'Watch Demo', href: '#dashboard-preview' },
         trustNote: 'No credit card required \u00b7 14-day free trial \u00b7 Cancel anytime',
     },
@@ -199,7 +199,7 @@ export const defaultLandingData = {
     cta: {
         headline: 'Ready to Transform Your Manufacturing?',
         subtext: 'Join 500+ factories already using FactoryPulse ERP to streamline operations, reduce waste, and boost profitability.',
-        ctaPrimary: { label: 'Start Your Free Trial', href: '/setup' },
+        ctaPrimary: { label: 'Start Your Free Trial', href: '/signup' },
         ctaSecondary: { label: 'Schedule a Demo', href: '#contact' },
     },
     footer: {

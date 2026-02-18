@@ -13,7 +13,7 @@ class CustomerService extends BaseService
      */
     public function list(array $filters = [], int $perPage = 15)
     {
-        $query = Customer::query()->with(['salesOrders', 'formulas']);
+        $query = Customer::query()->with(['salesOrders', 'formulas', 'creditFacilityType']);
 
         // Search
         if (!empty($filters['search'])) {
@@ -70,15 +70,24 @@ class CustomerService extends BaseService
 
         return $this->transaction(function () use ($data) {
             // Generate customer code
-            $data['customer_code'] = $this->generateReference('CUST');
+            $data['customer_code'] = $this->generateReference('CUST', 'customers', 'customer_code');
 
             // Validate credit settings
             if (in_array($data['customer_type'] ?? 'cash', ['credit', 'both'])) {
+                // If a credit facility type is selected, use its defaults
+                if (!empty($data['credit_facility_type_id'])) {
+                    $facilityType = \App\Models\CreditFacilityType::find($data['credit_facility_type_id']);
+                    if ($facilityType) {
+                        $data['credit_limit'] = $data['credit_limit'] ?? $facilityType->default_limit;
+                        $data['payment_terms_days'] = $data['payment_terms_days'] ?? $facilityType->payment_terms_in_days;
+                    }
+                }
                 $data['credit_limit'] = $data['credit_limit'] ?? 0;
                 $data['payment_terms_days'] = $data['payment_terms_days'] ?? 0;
             } else {
                 $data['credit_limit'] = 0;
                 $data['payment_terms_days'] = 0;
+                $data['credit_facility_type_id'] = null;
             }
 
             $data['outstanding_balance'] = 0;
@@ -88,7 +97,7 @@ class CustomerService extends BaseService
 
             $customer = Customer::create($data);
 
-            return $customer->fresh();
+            return $customer->fresh(['creditFacilityType']);
         });
     }
 
@@ -112,11 +121,21 @@ class CustomerService extends BaseService
                 }
                 $data['credit_limit'] = 0;
                 $data['payment_terms_days'] = 0;
+                $data['credit_facility_type_id'] = null;
+            }
+
+            // If a credit facility type is selected, use its defaults for credit settings
+            if (!empty($data['credit_facility_type_id']) && in_array($data['customer_type'] ?? $customer->customer_type, ['credit', 'both'])) {
+                $facilityType = \App\Models\CreditFacilityType::find($data['credit_facility_type_id']);
+                if ($facilityType) {
+                    $data['credit_limit'] = $data['credit_limit'] ?? $facilityType->default_limit;
+                    $data['payment_terms_days'] = $data['payment_terms_days'] ?? $facilityType->payment_terms_in_days;
+                }
             }
 
             $customer->update($data);
 
-            return $customer->fresh();
+            return $customer->fresh(['creditFacilityType']);
         });
     }
 

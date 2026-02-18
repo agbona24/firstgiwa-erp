@@ -47,10 +47,24 @@ use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\SetupController;
 use App\Http\Controllers\API\InstallController;
 
+// Super Admin Controllers
+use App\Http\Controllers\API\SuperAdmin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\API\SuperAdmin\TenantController as AdminTenantController;
+use App\Http\Controllers\API\SuperAdmin\UserController as AdminUserController;
+use App\Http\Controllers\API\SuperAdmin\SystemController as AdminSystemController;
+use App\Http\Controllers\API\SuperAdmin\PlanController as AdminPlanController;
+use App\Http\Controllers\API\SuperAdmin\CmsController as AdminCmsController;
+use App\Http\Controllers\API\PublicPlanController;
+use App\Http\Controllers\API\LandingController;
+use App\Http\Controllers\API\RegisterController;
+
 Route::prefix('v1')->group(function () {
     // Public routes
     Route::post('/login', [AuthController::class, 'login']);
-    
+    Route::post('/register', [RegisterController::class, 'register']);
+    Route::get('/plans', [PublicPlanController::class, 'index']);
+    Route::get('/landing-content', [LandingController::class, 'getContent']);
+
     // Installation wizard routes (public - for initial system installation)
     Route::prefix('install')->group(function () {
         Route::get('/status', [InstallController::class, 'checkInstallStatus']);
@@ -72,6 +86,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware('api.key.or.auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/change-password', [AuthController::class, 'changePassword']);
         
         // Dashboard
         Route::prefix('dashboard')->group(function () {
@@ -490,5 +505,30 @@ Route::prefix('v1')->group(function () {
             Route::put('/api', [ApiSettingsController::class, 'update']);
             Route::post('/api/rotate-key', [ApiSettingsController::class, 'rotateKey']);
         });
+    });
+
+    // Super Admin Routes
+    Route::prefix('admin')->middleware(['auth:sanctum', 'system.admin'])->group(function () {
+        Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+
+        Route::apiResource('tenants', AdminTenantController::class);
+        Route::post('/tenants/{id}/suspend', [AdminTenantController::class, 'suspend']);
+        Route::post('/tenants/{id}/activate', [AdminTenantController::class, 'activate']);
+        Route::post('/tenants/{id}/impersonate', [AdminTenantController::class, 'impersonate']);
+
+        Route::get('/users', [AdminUserController::class, 'index']);
+        Route::post('/users', [AdminUserController::class, 'store']);
+        Route::delete('/users/{id}', [AdminUserController::class, 'destroy']);
+
+        Route::get('/system/health', [AdminSystemController::class, 'health']);
+        Route::get('/system/activity-logs', [AdminSystemController::class, 'activityLogs']);
+
+        Route::get('/tenants/{id}/users', [AdminTenantController::class, 'getUsers']);
+
+        Route::apiResource('plans', AdminPlanController::class);
+        Route::post('/plans/{id}/toggle-active', [AdminPlanController::class, 'toggleActive']);
+
+        Route::get('/cms/landing', [AdminCmsController::class, 'getLandingContent']);
+        Route::put('/cms/landing', [AdminCmsController::class, 'updateLandingContent']);
     });
 });

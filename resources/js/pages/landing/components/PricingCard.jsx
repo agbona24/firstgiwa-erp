@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 
-export default function PricingCard({ name, price, period, description, features, highlighted, badge, buttonText, index = 0 }) {
+export default function PricingCard({ name, price, period, description, features, highlighted, badge, buttonText, buttonHref, index = 0 }) {
     const { ref, isVisible } = useScrollReveal();
 
     return (
@@ -40,7 +40,7 @@ export default function PricingCard({ name, price, period, description, features
 
             {/* CTA Button */}
             <Link
-                to="/setup"
+                to={buttonHref || `/signup?plan=${name.toLowerCase()}`}
                 className={`
                     block w-full text-center py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-300
                     ${highlighted

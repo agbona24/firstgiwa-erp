@@ -282,8 +282,16 @@ export default function Login() {
                     </div>
                     */}
 
+                    {/* Sign up link */}
+                    <p className="text-center text-sm text-slate-500 mt-8">
+                        Don't have an account?{' '}
+                        <a href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold transition">
+                            Sign up
+                        </a>
+                    </p>
+
                     {/* Footer */}
-                    <p className="text-center text-xs text-slate-400 mt-8">
+                    <p className="text-center text-xs text-slate-400 mt-4">
                         &copy; {new Date().getFullYear()} FactoryPulse System. All rights reserved.
                     </p>
                 </div>

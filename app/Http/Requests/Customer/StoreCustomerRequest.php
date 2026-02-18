@@ -9,7 +9,7 @@ class StoreCustomerRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return Auth::user()->hasPermission('customers.create');
+        return true;
     }
 
     public function rules(): array
@@ -21,6 +21,7 @@ class StoreCustomerRequest extends FormRequest
             'customer_type' => 'required|in:cash,credit,both',
             'address' => 'nullable|string',
             'contact_person' => 'nullable|string|max:255',
+            'credit_facility_type_id' => 'nullable|exists:credit_facility_types,id',
             'credit_limit' => 'nullable|numeric|min:0',
             'payment_terms_days' => 'nullable|integer|min:0',
             'tax_id' => 'nullable|string|max:50',

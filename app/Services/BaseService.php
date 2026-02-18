@@ -36,10 +36,22 @@ abstract class BaseService
 
     /**
      * Check if the current user has a specific permission.
+     * Throws an exception if the user does not have the permission.
      */
     protected function hasPermission(string $permission): bool
     {
-        return $this->user()?->hasPermission($permission) ?? false;
+        $user = $this->user();
+        if (!$user) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('This action is unauthorized.');
+        }
+        // Super Admin role bypasses all permission checks
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+        if (!$user->hasPermission($permission)) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('This action is unauthorized.');
+        }
+        return true;
     }
 
     /**

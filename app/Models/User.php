@@ -29,6 +29,7 @@ class User extends Authenticatable
         'branch_id',
         'last_login_at',
         'pin_code',
+        'is_system_admin',
     ];
 
     /**
@@ -53,6 +54,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
+            'is_system_admin' => 'boolean',
         ];
     }
 
@@ -70,6 +72,14 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return $this->hasRole('Super Admin');
+    }
+
+    /**
+     * Check if user is a system-level admin (platform owner).
+     */
+    public function isSystemAdmin(): bool
+    {
+        return (bool) $this->is_system_admin;
     }
 
     /**

@@ -15,6 +15,13 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            // Platform Config
+            PlanSeeder::class,
+            LandingPageContentSeeder::class,
+
+            // System Admin (platform owner)
+            SystemAdminSeeder::class,
+
             // Core System Setup
             TenantSeeder::class,
             BranchSeeder::class,

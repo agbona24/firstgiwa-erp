@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import Login from './pages/auth/Login';
+import Signup from './pages/auth/Signup';
 import Dashboard from './pages/Dashboard';
 import { useAuth } from './hooks/useAuth';
 import AppLayout from './components/layout/AppLayout';
@@ -22,6 +23,19 @@ import { checkSetupStatus } from './services/setupAPI';
 
 // Lazy-loaded landing page (not bundled with authenticated app)
 const LandingPage = lazy(() => import('./pages/landing/LandingPage'));
+
+// Lazy-loaded Super Admin panel
+const SuperAdminLayout = lazy(() => import('./components/admin/SuperAdminLayout'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminTenantList = lazy(() => import('./pages/admin/TenantList'));
+const TenantCreate = lazy(() => import('./pages/admin/TenantCreate'));
+const TenantDetail = lazy(() => import('./pages/admin/TenantDetail'));
+const AdminUserListPage = lazy(() => import('./pages/admin/AdminUserList'));
+const SystemHealth = lazy(() => import('./pages/admin/SystemHealth'));
+const ActivityLogsPage = lazy(() => import('./pages/admin/ActivityLogs'));
+const PlanList = lazy(() => import('./pages/admin/PlanList'));
+const PlanForm = lazy(() => import('./pages/admin/PlanForm'));
+const LandingPageEditor = lazy(() => import('./pages/admin/LandingPageEditor'));
 
 // Module Pages
 import InventoryList from './pages/inventory/InventoryList';
@@ -147,8 +161,37 @@ function App() {
                     {/* Public Routes */}
                     <Route
                         path="/login"
-                        element={!user ? <Login /> : <Navigate to="/dashboard" replace />}
+                        element={!user ? <Login /> : <Navigate to={user.is_system_admin ? '/admin' : '/dashboard'} replace />}
                     />
+                    <Route
+                        path="/signup"
+                        element={!user ? <Signup /> : <Navigate to={user.is_system_admin ? '/admin' : '/dashboard'} replace />}
+                    />
+
+                    {/* Super Admin Panel */}
+                    <Route path="/admin" element={
+                        user?.is_system_admin ? (
+                            <Suspense fallback={
+                                <div className="min-h-screen flex items-center justify-center bg-slate-800">
+                                    <div className="spinner w-12 h-12"></div>
+                                </div>
+                            }>
+                                <SuperAdminLayout />
+                            </Suspense>
+                        ) : user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+                    }>
+                        <Route index element={<Suspense fallback={null}><AdminDashboard /></Suspense>} />
+                        <Route path="tenants" element={<Suspense fallback={null}><AdminTenantList /></Suspense>} />
+                        <Route path="tenants/create" element={<Suspense fallback={null}><TenantCreate /></Suspense>} />
+                        <Route path="tenants/:id" element={<Suspense fallback={null}><TenantDetail /></Suspense>} />
+                        <Route path="plans" element={<Suspense fallback={null}><PlanList /></Suspense>} />
+                        <Route path="plans/create" element={<Suspense fallback={null}><PlanForm /></Suspense>} />
+                        <Route path="plans/:id/edit" element={<Suspense fallback={null}><PlanForm /></Suspense>} />
+                        <Route path="landing-page" element={<Suspense fallback={null}><LandingPageEditor /></Suspense>} />
+                        <Route path="users" element={<Suspense fallback={null}><AdminUserListPage /></Suspense>} />
+                        <Route path="system" element={<Suspense fallback={null}><SystemHealth /></Suspense>} />
+                        <Route path="activity" element={<Suspense fallback={null}><ActivityLogsPage /></Suspense>} />
+                    </Route>
 
                     {/* Protected Routes with Layout */}
                     <Route element={user ? <AppLayout /> : <Navigate to="/login" replace />}>
@@ -217,7 +260,7 @@ function App() {
                         path="/"
                         element={
                             user ? (
-                                <Navigate to="/dashboard" replace />
+                                <Navigate to={user.is_system_admin ? '/admin' : '/dashboard'} replace />
                             ) : (
                                 <Suspense fallback={
                                     <div className="min-h-screen flex items-center justify-center bg-white">
