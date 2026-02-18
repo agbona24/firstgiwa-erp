@@ -101,6 +101,13 @@ function App() {
             return;
         }
 
+        // Skip check if user is already logged in — app is obviously installed
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            setAppStatus({ checking: false, needsInstall: false, needsSetup: false });
+            return;
+        }
+
         try {
             const status = await checkSetupStatus();
             if (status.needs_install) {
@@ -111,8 +118,9 @@ function App() {
                 setAppStatus({ checking: false, needsInstall: false, needsSetup: false });
             }
         } catch (error) {
-            console.log('Status check failed, assuming needs install');
-            setAppStatus({ checking: false, needsInstall: true, needsSetup: false });
+            // Don't assume needs install on API errors — let the app proceed
+            console.log('Status check failed, proceeding normally');
+            setAppStatus({ checking: false, needsInstall: false, needsSetup: false });
         }
     };
 
