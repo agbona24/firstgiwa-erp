@@ -111,7 +111,9 @@ class RegisterController extends Controller
                 'message' => 'Account created successfully! Welcome to FactoryPulse.',
                 'token' => $token,
                 'user' => array_merge($user->toArray(), [
-                    'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                    'all_permissions' => $user->getPermissionsViaRoles()->pluck('name')
+                            ->merge($user->permissions->pluck('name'))
+                            ->unique()->values(),
                 ]),
                 'tenant' => $tenant,
             ], 201);

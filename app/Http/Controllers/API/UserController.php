@@ -63,7 +63,9 @@ class UserController extends Controller
                 'has_pin' => !empty($user->pin_code),
                 'created_at' => $user->created_at,
                 'roles' => $user->roles->pluck('name'),
-                'permissions' => $user->getAllPermissions()->pluck('name'),
+                'permissions' => $user->getPermissionsViaRoles()->pluck('name')
+                    ->merge($user->permissions->pluck('name'))
+                    ->unique()->values(),
                 'tenant' => $user->tenant,
                 'branch' => $user->branch,
             ];
@@ -142,7 +144,9 @@ class UserController extends Controller
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
                 'roles' => $user->roles->pluck('name'),
-                'permissions' => $user->getAllPermissions()->pluck('name'),
+                'permissions' => $user->getPermissionsViaRoles()->pluck('name')
+                    ->merge($user->permissions->pluck('name'))
+                    ->unique()->values(),
                 'tenant' => $user->tenant,
                 'branch' => $user->branch,
             ]

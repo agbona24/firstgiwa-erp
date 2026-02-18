@@ -55,7 +55,9 @@ class AuthController extends Controller
 
             return response()->json([
                 'user' => array_merge($user->toArray(), [
-                    'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                    'all_permissions' => $user->getPermissionsViaRoles()->pluck('name')
+                        ->merge($user->permissions->pluck('name'))
+                        ->unique()->values(),
                 ]),
                 'token' => $token,
                 'message' => 'Login successful'
@@ -95,7 +97,9 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => array_merge($user->toArray(), [
-                'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                'all_permissions' => $user->getPermissionsViaRoles()->pluck('name')
+                        ->merge($user->permissions->pluck('name'))
+                        ->unique()->values(),
             ]),
             'token' => $token,
             'message' => 'Login successful'
@@ -129,7 +133,9 @@ class AuthController extends Controller
 
         return response()->json([
             'user' => array_merge($user->toArray(), [
-                'all_permissions' => $user->getAllPermissions()->pluck('name')->values(),
+                'all_permissions' => $user->getPermissionsViaRoles()->pluck('name')
+                        ->merge($user->permissions->pluck('name'))
+                        ->unique()->values(),
             ]),
         ]);
     }

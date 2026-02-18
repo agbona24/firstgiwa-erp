@@ -259,7 +259,9 @@ class TenantController extends Controller
         return response()->json([
             'token' => $token,
             'user' => array_merge($tenantAdmin->toArray(), [
-                'all_permissions' => $tenantAdmin->getAllPermissions()->pluck('name')->values(),
+                'all_permissions' => $tenantAdmin->getPermissionsViaRoles()->pluck('name')
+                            ->merge($tenantAdmin->permissions->pluck('name'))
+                            ->unique()->values(),
             ]),
             'tenant' => $tenant,
             'message' => "Now impersonating {$tenantAdmin->name} at {$tenant->name}",
