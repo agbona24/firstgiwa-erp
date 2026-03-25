@@ -124,7 +124,7 @@ export const MODULE_TUTORIALS = {
             {
                 target: '[data-tour="pos-customer"]',
                 title: 'Customer Selection',
-                content: 'Link a customer to this sale:\n\n• **Walk-in** - Anonymous cash sales\n• **Existing** - Search registered customers\n• **New** - Quick-add customer info\n\n🏷️ Regular customers can use credit facilities!',
+                content: 'Link a customer to this sale:\n\n• **Cash Booking** - Anonymous cash sales\n• **Existing** - Search registered customers\n• **New** - Quick-add customer info\n\n🏷️ Regular customers can use credit facilities!',
                 placement: 'bottom',
             },
             {
@@ -253,7 +253,7 @@ export const MODULE_TUTORIALS = {
             {
                 target: '[data-tour="customer-list"]',
                 title: 'Customer Directory',
-                content: 'Browse all customers:\n\n• **Name** - Customer/Company name\n• **Phone** - Primary contact\n• **Type** - Walk-in/Regular/VIP\n• **Balance** - Outstanding credit\n• **Last Purchase** - Recent activity',
+                content: 'Browse all customers:\n\n• **Name** - Customer/Company name\n• **Phone** - Primary contact\n• **Type** - Cash Booking/Regular/VIP\n• **Balance** - Outstanding credit\n• **Last Purchase** - Recent activity',
                 placement: 'top',
             },
             {

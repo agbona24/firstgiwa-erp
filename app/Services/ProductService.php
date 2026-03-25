@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\Warehouse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
@@ -87,22 +89,40 @@ class ProductService extends BaseService
             // Extract warehouse_id if provided (it's not a product field)
             $warehouseId = $data['warehouse_id'] ?? null;
             unset($data['warehouse_id']);
-            
-            $product = Product::create($data);
-            
-            // If warehouse specified and track_inventory is true, create initial inventory record
-            if ($warehouseId && ($data['track_inventory'] ?? true)) {
-                \App\Models\Inventory::create([
-                    'product_id' => $product->id,
-                    'warehouse_id' => $warehouseId,
-                    'quantity' => 0,
-                    'reserved_quantity' => 0,
-                    'available_quantity' => 0,
-                    'tenant_id' => $product->tenant_id,
-                    'branch_id' => $product->branch_id,
-                ]);
+
+            // Stamp tenant_id / branch_id from the authenticated user so the
+            // product is discoverable by POS and other tenant-scoped queries.
+            $user = $this->user();
+            if ($user) {
+                $data['tenant_id'] = $data['tenant_id'] ?? $user->tenant_id;
+                $data['branch_id']  = $data['branch_id']  ?? $user->branch_id;
             }
-            
+
+            $product = Product::create($data);
+
+            // If track_inventory is true, create initial inventory records
+            if ($data['track_inventory'] ?? true) {
+                if ($warehouseId) {
+                    // Specific warehouse requested — create for that warehouse only
+                    $warehouseIds = [$warehouseId];
+                } else {
+                    // No warehouse specified — create for all active warehouses so the
+                    // product is immediately visible in inventory
+                    $warehouseIds = Warehouse::where('is_active', true)
+                        ->pluck('id')
+                        ->toArray();
+                }
+
+                foreach ($warehouseIds as $wid) {
+                    Inventory::create([
+                        'product_id'        => $product->id,
+                        'warehouse_id'      => $wid,
+                        'quantity'          => 0,
+                        'reserved_quantity' => 0,
+                    ]);
+                }
+            }
+
             $product->load(['category', 'inventory']);
             return $product;
         });

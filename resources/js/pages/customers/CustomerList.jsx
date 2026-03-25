@@ -14,17 +14,23 @@ import { creditFacilityTypesAPI } from '../../services/settingsAPI';
 import { exportSelectedToCSV } from '../../utils/exportUtils';
 
 const fmt = (n) => window.formatCurrency(n, { minimumFractionDigits: 2 });
+// Credit facility is tied to the payment type, not the category
+const creditEnabledTypes = ['credit', 'both'];
+
+const CATEGORY_LABELS = { retail: 'Retail', wholesale: 'Wholesale', distributor: 'Distributor', walk_in: 'Walk-in', other: 'Other' };
+const PAYMENT_LABELS   = { cash: 'Cash', credit: 'Credit', both: 'Cash & Credit' };
 
 export default function CustomerList() {
     const toast = useToast();
     const [loading, setLoading] = useState(true);
     const [customers, setCustomers] = useState([]);
     const [search, setSearch] = useState('');
-    const [typeFilter, setTypeFilter] = useState('');
+    const [paymentFilter, setPaymentFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [showCreate, setShowCreate] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
-    const [formData, setFormData] = useState({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_facility_type_id: '', address: '' });
+    const [formData, setFormData] = useState({ name: '', contact_person: '', email: '', phone: '', customer_category: 'retail', customer_type: 'cash', credit_facility_type_id: '', address: '' });
     const [showEdit, setShowEdit] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, customer: null });
@@ -34,7 +40,7 @@ export default function CustomerList() {
     // Fetch customers from API
     useEffect(() => {
         fetchCustomers();
-    }, [search, typeFilter, statusFilter]);
+    }, [search, paymentFilter, categoryFilter, statusFilter]);
 
     // Fetch credit facility types
     useEffect(() => {
@@ -54,7 +60,8 @@ export default function CustomerList() {
             setLoading(true);
             const params = {};
             if (search) params.search = search;
-            if (typeFilter) params.customer_type = typeFilter;
+            if (paymentFilter) params.customer_type = paymentFilter;
+            if (categoryFilter) params.customer_category = categoryFilter;
             if (statusFilter === 'blocked') {
                 params.credit_blocked = true;
             } else if (statusFilter === 'active') {
@@ -74,7 +81,7 @@ export default function CustomerList() {
     const stats = useMemo(() => ({
         total: customers.length,
         active: customers.filter(c => c.is_active).length,
-        creditCustomers: customers.filter(c => c.customer_type === 'credit' || c.customer_type === 'both').length,
+        creditCustomers: customers.filter(c => ['credit', 'both'].includes(c.customer_type)).length,
         totalOutstanding: customers.reduce((sum, c) => sum + (c.outstanding_balance || 0), 0),
     }), [customers]);
 
@@ -88,7 +95,7 @@ export default function CustomerList() {
             await customerAPI.createCustomer(formData);
             toast.success('Customer created successfully');
             setShowCreate(false);
-            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_facility_type_id: '', address: '' });
+            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_category: 'retail', customer_type: 'cash', credit_facility_type_id: '', address: '' });
             fetchCustomers();
         } catch (error) {
             console.error('Error creating customer:', error);
@@ -103,6 +110,7 @@ export default function CustomerList() {
             contact_person: customer.contact_person || '',
             email: customer.email || '',
             phone: customer.phone || '',
+            customer_category: customer.customer_category || 'retail',
             customer_type: customer.customer_type || 'cash',
             credit_facility_type_id: customer.credit_facility_type_id || '',
             address: customer.address || '',
@@ -117,7 +125,7 @@ export default function CustomerList() {
             toast.success('Customer updated successfully');
             setShowEdit(false);
             setEditingCustomer(null);
-            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_type: 'cash', credit_facility_type_id: '', address: '' });
+            setFormData({ name: '', contact_person: '', email: '', phone: '', customer_category: 'retail', customer_type: 'cash', credit_facility_type_id: '', address: '' });
             fetchCustomers();
         } catch (error) {
             console.error('Error updating customer:', error);
@@ -146,8 +154,11 @@ export default function CustomerList() {
                 <div className="text-xs text-slate-500">{row.contact_person}</div>
             </div>
         )},
-        { key: 'customer_type', label: 'Type', sortable: true, render: (val) => (
-            <Badge variant={val === 'credit' ? 'pending' : val === 'both' ? 'approved' : 'draft'}>{val}</Badge>
+        { key: 'customer_category', label: 'Category', sortable: true, render: (val) => (
+            <Badge variant="draft">{CATEGORY_LABELS[val] || val || '—'}</Badge>
+        )},
+        { key: 'customer_type', label: 'Payment', sortable: true, render: (val) => (
+            <Badge variant={val === 'credit' ? 'pending' : val === 'both' ? 'approved' : 'draft'}>{PAYMENT_LABELS[val] || val}</Badge>
         )},
         { key: 'credit_limit', label: 'Credit Limit', sortable: true, render: (val) => val > 0 ? fmt(val) : <span className="text-slate-400">N/A</span> },
         { key: 'outstanding_balance', label: 'Credit Usage', render: (val, row) => {
@@ -212,7 +223,7 @@ export default function CustomerList() {
     const actions = [
         { label: 'View', onClick: (row) => setSelectedCustomer(row), variant: 'outline' },
         { label: 'Edit', onClick: (row) => handleEdit(row), variant: 'ghost' },
-        { label: 'Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, variant: 'ghost', show: (row) => row.customer_type !== 'cash' },
+        { label: 'Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, variant: 'ghost', show: (row) => creditEnabledTypes.includes(row.customer_type) },
         { label: 'Delete', onClick: (row) => setDeleteConfirm({ isOpen: true, customer: row }), variant: 'danger' },
     ];
 
@@ -300,10 +311,17 @@ export default function CustomerList() {
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-3">
                 <SearchBar onSearch={setSearch} placeholder="Search customers..." />
-                <FilterDropdown label="Type" value={typeFilter} onChange={setTypeFilter} options={[
-                    { value: 'cash', label: 'Cash' },
+                <FilterDropdown label="Category" value={categoryFilter} onChange={setCategoryFilter} options={[
+                    { value: 'retail', label: 'Retail' },
+                    { value: 'wholesale', label: 'Wholesale' },
+                    { value: 'distributor', label: 'Distributor' },
+                    { value: 'walk_in', label: 'Walk-in' },
+                    { value: 'other', label: 'Other' },
+                ]} />
+                <FilterDropdown label="Payment" value={paymentFilter} onChange={setPaymentFilter} options={[
+                    { value: 'cash', label: 'Cash Only' },
                     { value: 'credit', label: 'Credit' },
-                    { value: 'both', label: 'Both' },
+                    { value: 'both', label: 'Cash & Credit' },
                 ]} />
                 <FilterDropdown label="Status" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: 'active', label: 'Active' },
@@ -342,15 +360,27 @@ export default function CustomerList() {
                             <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Customer Type *</label>
-                        <select value={formData.customer_type} onChange={(e) => setFormData({...formData, customer_type: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                            <option value="cash">Cash Only</option>
-                            <option value="credit">Credit</option>
-                            <option value="both">Cash & Credit</option>
-                        </select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Customer Category *</label>
+                            <select value={formData.customer_category} onChange={(e) => setFormData({...formData, customer_category: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="retail">Retail</option>
+                                <option value="wholesale">Wholesale</option>
+                                <option value="distributor">Distributor</option>
+                                <option value="walk_in">Walk-in</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Payment Type *</label>
+                            <select value={formData.customer_type} onChange={(e) => setFormData({...formData, customer_type: e.target.value, credit_facility_type_id: ''})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="cash">Cash Only</option>
+                                <option value="credit">Credit</option>
+                                <option value="both">Cash &amp; Credit</option>
+                            </select>
+                        </div>
                     </div>
-                    {(formData.customer_type === 'credit' || formData.customer_type === 'both') && (
+                    {creditEnabledTypes.includes(formData.customer_type) && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Credit Facility Type *</label>
                             <select required value={formData.credit_facility_type_id} onChange={(e) => setFormData({...formData, credit_facility_type_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
@@ -402,7 +432,7 @@ export default function CustomerList() {
                         </div>
 
                         {/* Credit Facility Summary */}
-                        {selectedCustomer.customer_type !== 'cash' && (
+                        {creditEnabledTypes.includes(selectedCustomer.customer_type) && (
                             <div className={`p-4 rounded-lg border-2 ${selectedCustomer.credit_blocked ? 'border-red-300 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
                                 <div className="flex items-center justify-between mb-3">
                                     <h4 className="font-semibold text-slate-900">Credit Facility</h4>
@@ -561,15 +591,27 @@ export default function CustomerList() {
                             <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Customer Type *</label>
-                        <select value={formData.customer_type} onChange={(e) => setFormData({...formData, customer_type: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                            <option value="cash">Cash Only</option>
-                            <option value="credit">Credit</option>
-                            <option value="both">Cash & Credit</option>
-                        </select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Customer Category *</label>
+                            <select value={formData.customer_category} onChange={(e) => setFormData({...formData, customer_category: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="retail">Retail</option>
+                                <option value="wholesale">Wholesale</option>
+                                <option value="distributor">Distributor</option>
+                                <option value="walk_in">Walk-in</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Payment Type *</label>
+                            <select value={formData.customer_type} onChange={(e) => setFormData({...formData, customer_type: e.target.value, credit_facility_type_id: ''})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="cash">Cash Only</option>
+                                <option value="credit">Credit</option>
+                                <option value="both">Cash &amp; Credit</option>
+                            </select>
+                        </div>
                     </div>
-                    {(formData.customer_type === 'credit' || formData.customer_type === 'both') && (
+                    {creditEnabledTypes.includes(formData.customer_type) && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Credit Facility Type *</label>
                             <select required value={formData.credit_facility_type_id} onChange={(e) => setFormData({...formData, credit_facility_type_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">

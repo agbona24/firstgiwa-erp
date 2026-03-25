@@ -341,7 +341,7 @@ class CreditAnalysisService
     {
         // Get data from credit tracking tables (eager load salesOrder for payment info)
         $creditTransactions = $customer->creditTransactions()
-            ->with('salesOrder')
+            ->with('salesOrder.charges')
             ->orderBy('transaction_date', 'desc')
             ->get();
         
@@ -356,7 +356,7 @@ class CreditAnalysisService
         $creditSalesOrders = SalesOrder::where('customer_id', $customer->id)
             ->where('payment_type', 'credit')
             ->whereNotIn('id', $salesOrderIdsWithTracking) // Exclude duplicates
-            ->with('customer')
+            ->with(['customer', 'charges'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -477,6 +477,12 @@ class CreditAnalysisService
                 'due_date' => $dueDate->format('Y-m-d'),
                 'status' => $status,
                 'source' => 'sales_order',
+                'charges_breakdown' => $order->charges ? $order->charges->map(fn($c) => [
+                    'name' => $c->charge_name,
+                    'amount' => floatval($c->charge_amount),
+                ])->values()->toArray() : [],
+                'charges_total' => $order->charges ? $order->charges->sum('charge_amount') : 0,
+                'goods_amount' => floatval($order->total_amount) - ($order->charges ? $order->charges->sum('charge_amount') : 0),
             ];
         });
 
@@ -539,6 +545,12 @@ class CreditAnalysisService
                 'due_date' => $dueDate,
                 'status' => $status,
                 'source' => 'credit_tracking',
+                'charges_breakdown' => ($salesOrder && $salesOrder->charges) ? $salesOrder->charges->map(fn($c) => [
+                    'name' => $c->charge_name,
+                    'amount' => floatval($c->charge_amount),
+                ])->values()->toArray() : [],
+                'charges_total' => ($salesOrder && $salesOrder->charges) ? $salesOrder->charges->sum('charge_amount') : 0,
+                'goods_amount' => $amount - (($salesOrder && $salesOrder->charges) ? $salesOrder->charges->sum('charge_amount') : 0),
             ];
         })->concat($salesOrdersAsTransactions)->sortByDesc('transaction_date')->values();
 

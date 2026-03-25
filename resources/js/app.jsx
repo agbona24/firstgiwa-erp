@@ -154,8 +154,8 @@ function App() {
                 <BranchProvider isAuthenticated={!!user}>
                 <OnboardingProvider>
                 <TutorialProvider>
-                <OnboardingTour />
-                <TutorialModal />
+                {user && <OnboardingTour />}
+                {user && <TutorialModal />}
                 <PWAInstallBanner />
                 <OfflineIndicator />
                 <UpdateBanner />
@@ -163,8 +163,11 @@ function App() {
                     {/* Installation Wizard */}
                     <Route path="/install" element={<InstallWizard />} />
                     
-                    {/* Setup Wizard */}
-                    <Route path="/setup" element={<SetupWizard />} />
+                    {/* Setup Wizard — only for unauthenticated users on a fresh system */}
+                    <Route
+                        path="/setup"
+                        element={user ? <Navigate to="/dashboard" replace /> : <SetupWizard />}
+                    />
 
                     {/* Public Routes */}
                     <Route
@@ -225,8 +228,8 @@ function App() {
                         <Route path="/pos/reports" element={<PermissionGuard permissions={['pos.access']}><SessionReports /></PermissionGuard>} />
 
                         {/* Contacts */}
-                        <Route path="/customers" element={<PermissionGuard permissions={['sales.view']}><CustomerList /></PermissionGuard>} />
-                        <Route path="/customers/:id/ledger" element={<PermissionGuard permissions={['sales.view']}><CustomerLedger /></PermissionGuard>} />
+                        <Route path="/customers" element={<PermissionGuard permissions={['customers.view']}><CustomerList /></PermissionGuard>} />
+                        <Route path="/customers/:id/ledger" element={<PermissionGuard permissions={['customers.view']}><CustomerLedger /></PermissionGuard>} />
                         <Route path="/suppliers" element={<PermissionGuard permissions={['purchases.view']}><SupplierList /></PermissionGuard>} />
 
                         {/* Production */}

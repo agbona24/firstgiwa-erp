@@ -10,12 +10,14 @@ import settingsAPI, {
     taxesAPI, paymentMethodsAPI, bankAccountsAPI, sequencesAPI,
     approvalsAPI, payrollSettingsAPI, fiscalYearAPI, notificationSettingsAPI,
     smsSettingsAPI, emailSettingsAPI, printSettingsAPI, creditSettingsAPI, 
-    creditFacilityTypesAPI, backupAPI, templatesAPI, apiSettingsAPI
+    creditFacilityTypesAPI, backupAPI, templatesAPI, apiSettingsAPI,
+    saleChargesAPI
 } from '../../services/settingsAPI';
 import documentAPI, { openPdfInNewTab } from '../../services/documentAPI';
 import warehouseAPI from '../../services/warehouseAPI';
 import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import userAPI from '../../services/userAPI';
+import { resetSetup } from '../../services/setupAPI';
 
 const fmt = (n) => formatCurrency(n, { minimumFractionDigits: 2 });
 
@@ -24,7 +26,8 @@ const sections = [
     { key: 'branches', label: 'Branches', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z' },
     { key: 'inventory', label: 'Inventory', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
     { key: 'sales', label: 'Sales & Billing', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { key: 'taxes', label: 'Taxes & Charges', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
+    { key: 'taxes', label: 'Taxes', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
+    { key: 'charges', label: 'Sale Charges', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
     { key: 'payment_methods', label: 'Payment Methods', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
     { key: 'banks', label: 'Banks & Accounts', icon: 'M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4z' },
     { key: 'sequences', label: 'Number Sequences', icon: 'M7 20l4-16m2 16l4-16M6 9h14M4 15h14' },
@@ -40,6 +43,7 @@ const sections = [
     { key: 'credit', label: 'Credit Facility', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
     { key: 'backup', label: 'Backup & Data', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
     { key: 'api', label: 'API & Integrations', icon: 'M4 6h16M4 12h16M4 18h16M9 6v12' },
+    { key: 'danger', label: 'Danger Zone', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z' },
 ];
 
 export default function Settings() {
@@ -49,6 +53,29 @@ export default function Settings() {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const logoInputRef = useRef(null);
+
+    // Danger Zone — Reset Application
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resetConfirmText, setResetConfirmText] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+
+    const handleResetApplication = async () => {
+        if (resetConfirmText !== 'RESET') return;
+        setIsResetting(true);
+        try {
+            await resetSetup();
+            // Clear all local auth state
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('factorypulse_setup_complete');
+            localStorage.removeItem('factorypulse_setup_data');
+            localStorage.removeItem('factorypulse_show_tour');
+            // Hard redirect to /setup so the SPA re-evaluates setup state
+            window.location.href = '/setup';
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Reset failed. Please try again.');
+            setIsResetting(false);
+        }
+    };
 
     const handleStartTour = () => {
         resetTour();
@@ -144,6 +171,71 @@ export default function Settings() {
         setEditingTax(t);
         setTaxForm({ name: t.name, code: t.code, rate: t.rate, type: t.type, applies_to: t.applies_to, is_compound: t.is_compound });
         setShowAddTax(true);
+    };
+
+    // Sale / Delivery Charges
+    const [saleCharges, setSaleCharges] = useState([]);
+    const [showAddCharge, setShowAddCharge] = useState(false);
+    const [editingCharge, setEditingCharge] = useState(null);
+    const defaultChargeForm = { name: '', description: '', amount_type: 'fixed', default_amount: '', applies_to: 'both', add_to_credit: false, allow_override: true };
+    const [chargeForm, setChargeForm] = useState(defaultChargeForm);
+
+    const handleSaveCharge = async () => {
+        if (!chargeForm.name || chargeForm.default_amount === '') {
+            toast.error('Please fill in name and default amount');
+            return;
+        }
+        setSaving(true);
+        try {
+            const payload = { ...chargeForm, default_amount: Number(chargeForm.default_amount) };
+            if (editingCharge) {
+                await saleChargesAPI.update(editingCharge.id, payload);
+                setSaleCharges(prev => prev.map(c => c.id === editingCharge.id ? { ...c, ...payload } : c));
+                toast.success('Charge updated');
+            } else {
+                const res = await saleChargesAPI.create(payload);
+                const newCharge = res.data?.data?.charge || { id: Date.now(), ...payload, is_active: true };
+                setSaleCharges(prev => [...prev, newCharge]);
+                toast.success('Charge created');
+            }
+            setShowAddCharge(false);
+            setEditingCharge(null);
+            setChargeForm(defaultChargeForm);
+        } catch (error) {
+            console.error('Save charge error:', error.response?.data || error.message);
+            const msg = error.response?.data?.message
+                || (error.response?.data?.errors ? Object.values(error.response.data.errors).flat().join(' ') : null)
+                || error.message
+                || 'Failed to save charge';
+            toast.error(msg);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleEditCharge = (c) => {
+        setEditingCharge(c);
+        setChargeForm({ name: c.name, description: c.description || '', amount_type: c.amount_type, default_amount: c.default_amount, applies_to: c.applies_to, add_to_credit: !!c.add_to_credit, allow_override: c.allow_override !== false });
+        setShowAddCharge(true);
+    };
+
+    const handleToggleChargeActive = async (c) => {
+        try {
+            await saleChargesAPI.toggleActive(c.id);
+            setSaleCharges(prev => prev.map(x => x.id === c.id ? { ...x, is_active: !x.is_active } : x));
+        } catch (e) {
+            toast.error('Failed to update status');
+        }
+    };
+
+    const handleDeleteCharge = async (c) => {
+        try {
+            await saleChargesAPI.delete(c.id);
+            setSaleCharges(prev => prev.filter(x => x.id !== c.id));
+            toast.success('Charge deleted');
+        } catch (e) {
+            toast.error('Failed to delete');
+        }
     };
 
     // Payment Methods
@@ -702,6 +794,12 @@ export default function Settings() {
                     const res = await taxesAPI.list();
                     const taxes = res.data?.data?.taxes || res.data?.data || [];
                     setTaxes(taxes);
+                    break;
+                }
+                case 'charges': {
+                    const res = await saleChargesAPI.list();
+                    const charges = res.data?.data?.charges || [];
+                    setSaleCharges(Array.isArray(charges) ? charges : []);
                     break;
                 }
                 case 'payment_methods': {
@@ -1387,6 +1485,8 @@ ${md
     };
 
     const inputClass = 'w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 text-sm';
+    // Use inlineInputClass (no w-full) for inputs/selects inside flex containers so widths don't conflict
+    const inlineInputClass = 'px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 text-sm';
     const labelClass = 'block text-sm font-medium text-slate-700 mb-1';
 
     const renderSection = () => {
@@ -1793,15 +1893,15 @@ ${md
                     <div className="space-y-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-lg font-semibold text-slate-900">Taxes & Statutory Charges</h3>
-                                <p className="text-sm text-slate-500 mt-1">Manage all taxes, levies, and statutory charges applied to transactions</p>
+                                <h3 className="text-lg font-semibold text-slate-900">Taxes</h3>
+                                <p className="text-sm text-slate-500 mt-1">Manage VAT, WHT and other statutory taxes applied to transactions</p>
                             </div>
-                            <Button onClick={() => { setEditingTax(null); setTaxForm({ name: '', code: '', rate: '', type: 'percentage', applies_to: 'sales', is_compound: false }); setShowAddTax(true); }}>+ Add Tax/Charge</Button>
+                            <Button onClick={() => { setEditingTax(null); setTaxForm({ name: '', code: '', rate: '', type: 'percentage', applies_to: 'sales', is_compound: false }); setShowAddTax(true); }}>+ Add Tax</Button>
                         </div>
 
                         {showAddTax && (
                             <Card><CardBody className="p-4 space-y-4 border-2 border-blue-200">
-                                <h4 className="font-semibold text-slate-800">{editingTax ? 'Edit' : 'New'} Tax / Charge</h4>
+                                <h4 className="font-semibold text-slate-800">{editingTax ? 'Edit' : 'New'} Tax</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className={labelClass}>Name *</label>
@@ -1814,8 +1914,8 @@ ${md
                                     <div>
                                         <label className={labelClass}>Rate *</label>
                                         <div className="flex gap-2">
-                                            <input type="number" min="0" step="0.01" value={taxForm.rate} onChange={(e) => setTaxForm({...taxForm, rate: e.target.value})} className={`${inputClass} flex-1`} placeholder="e.g. 7.5" />
-                                            <select value={taxForm.type} onChange={(e) => setTaxForm({...taxForm, type: e.target.value})} className={`${inputClass} w-36`}>
+                                            <input type="number" min="0" step="0.01" value={taxForm.rate} onChange={(e) => setTaxForm({...taxForm, rate: e.target.value})} className={`${inlineInputClass} flex-1`} placeholder="e.g. 7.5" />
+                                            <select value={taxForm.type} onChange={(e) => setTaxForm({...taxForm, type: e.target.value})} className={`${inlineInputClass} w-36`}>
                                                 <option value="percentage">% (Percent)</option>
                                                 <option value="fixed">{getCurrencySymbol()} (Fixed)</option>
                                             </select>
@@ -1912,7 +2012,143 @@ ${md
                         )}
 
                         <div className="bg-amber-50 p-4 rounded-lg text-sm text-amber-800">
-                            <strong>Note:</strong> Only active taxes/charges will appear in Sales Orders, Purchase Orders, and Invoices. Deactivating a tax does not affect existing transactions.
+                            <strong>Note:</strong> Only active taxes will appear in Sales Orders, Purchase Orders, and Invoices. Deactivating a tax does not affect existing transactions.
+                        </div>
+                    </div>
+                );
+
+            case 'charges':
+                return (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900">Sale &amp; Delivery Charges</h3>
+                                <p className="text-sm text-slate-500 mt-1">Configure transport, loading, handling and other charges selectable when making a sale. Charges marked "Add to Credit" are automatically added to the customer's outstanding balance on delivery.</p>
+                            </div>
+                            <Button onClick={() => { setEditingCharge(null); setChargeForm(defaultChargeForm); setShowAddCharge(true); }}>+ Add Charge</Button>
+                        </div>
+
+                        {showAddCharge && (
+                            <Card><CardBody className="p-4 space-y-4 border-2 border-blue-200">
+                                <h4 className="font-semibold text-slate-800">{editingCharge ? 'Edit' : 'New'} Charge</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Name *</label>
+                                        <input type="text" value={chargeForm.name} onChange={(e) => setChargeForm({...chargeForm, name: e.target.value})} className={inputClass} placeholder="e.g. Transport, Loading, Handling" />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Applies To</label>
+                                        <select value={chargeForm.applies_to} onChange={(e) => setChargeForm({...chargeForm, applies_to: e.target.value})} className={inputClass}>
+                                            <option value="both">POS &amp; Sales Orders</option>
+                                            <option value="pos">POS only</option>
+                                            <option value="sales_order">Sales Orders only</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Default Amount *</label>
+                                        <div className="flex gap-2">
+                                            <input type="number" min="0" step="0.01" value={chargeForm.default_amount} onChange={(e) => setChargeForm({...chargeForm, default_amount: e.target.value})} className={`${inlineInputClass} flex-1`} placeholder="0.00" />
+                                            <select value={chargeForm.amount_type} onChange={(e) => setChargeForm({...chargeForm, amount_type: e.target.value})} className={`${inlineInputClass} w-36`}>
+                                                <option value="fixed">{getCurrencySymbol()} Fixed</option>
+                                                <option value="percentage">% of subtotal</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Description (optional)</label>
+                                        <input type="text" value={chargeForm.description} onChange={(e) => setChargeForm({...chargeForm, description: e.target.value})} className={inputClass} placeholder="Short description" />
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <input type="checkbox" id="add_to_credit" checked={chargeForm.add_to_credit} onChange={(e) => setChargeForm({...chargeForm, add_to_credit: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                                    <div>
+                                        <label htmlFor="add_to_credit" className="text-sm font-medium text-slate-700">Add to customer credit on delivery</label>
+                                        <p className="text-xs text-slate-400">When the order is delivered, this charge is added to the customer's outstanding credit balance</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <input type="checkbox" id="allow_override" checked={chargeForm.allow_override} onChange={(e) => setChargeForm({...chargeForm, allow_override: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                                    <div>
+                                        <label htmlFor="allow_override" className="text-sm font-medium text-slate-700">Allow amount to be changed at point of sale</label>
+                                        <p className="text-xs text-slate-400">When checked, staff can edit the charge amount when making a sale. Uncheck to lock the amount.</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 pt-2">
+                                    <Button onClick={handleSaveCharge} disabled={saving}>{saving ? 'Saving...' : (editingCharge ? 'Update' : 'Create')}</Button>
+                                    <Button variant="outline" onClick={() => { setShowAddCharge(false); setEditingCharge(null); }}>Cancel</Button>
+                                </div>
+                            </CardBody></Card>
+                        )}
+
+                        {/* Active charges */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">Active ({saleCharges.filter(c => c.is_active).length})</h4>
+                            <div className="space-y-2">
+                                {saleCharges.filter(c => c.is_active).map(c => (
+                                    <Card key={c.id}><CardBody className="p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                                                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-slate-900">{c.name}</span>
+                                                        {c.add_to_credit && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium">Adds to Credit</span>}
+                                                        {c.allow_override === false ? <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">🔒 Fixed amount</span> : <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">Editable</span>}
+                                                    </div>
+                                                    <div className="text-xs text-slate-500 mt-1">
+                                                        {c.amount_type === 'percentage' ? `${c.default_amount}% of subtotal` : fmt(c.default_amount)} &middot; {c.applies_to === 'both' ? 'POS & Sales Orders' : c.applies_to === 'pos' ? 'POS only' : 'Sales Orders only'}
+                                                        {c.description && ` · ${c.description}`}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <button className="text-sm text-blue-600 hover:text-blue-800" onClick={() => handleEditCharge(c)}>Edit</button>
+                                                <button className="text-sm text-amber-600 hover:text-amber-800" onClick={() => handleToggleChargeActive(c)}>Deactivate</button>
+                                            </div>
+                                        </div>
+                                    </CardBody></Card>
+                                ))}
+                                {saleCharges.filter(c => c.is_active).length === 0 && (
+                                    <div className="text-center py-6 text-slate-400 text-sm">No active charges. Add your first charge above.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Inactive charges */}
+                        {saleCharges.some(c => !c.is_active) && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Inactive ({saleCharges.filter(c => !c.is_active).length})</h4>
+                                <div className="space-y-2">
+                                    {saleCharges.filter(c => !c.is_active).map(c => (
+                                        <Card key={c.id}><CardBody className="p-4 opacity-60">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                                                        <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-semibold text-slate-700">{c.name}</span>
+                                                        <div className="text-xs text-slate-400 mt-1">
+                                                            {c.amount_type === 'percentage' ? `${c.default_amount}%` : fmt(c.default_amount)} &middot; Inactive
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <button className="text-sm text-blue-600 hover:text-blue-800" onClick={() => handleEditCharge(c)}>Edit</button>
+                                                    <button className="text-sm text-green-600 hover:text-green-800" onClick={() => handleToggleChargeActive(c)}>Activate</button>
+                                                    <button className="text-sm text-red-600 hover:text-red-800" onClick={() => handleDeleteCharge(c)}>Delete</button>
+                                                </div>
+                                            </div>
+                                        </CardBody></Card>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
+                            <strong>Note:</strong> Sale charges (transport, loading, etc.) are different from taxes. These are operational costs passed to the customer and can optionally be added to their credit account on delivery.
                         </div>
                     </div>
                 );
@@ -3572,8 +3808,8 @@ ${window.location.origin}/api/v1/products`}
                                     <div>
                                         <label className={labelClass}>Payment Terms *</label>
                                         <div className="flex gap-2">
-                                            <input type="number" min="1" max="365" value={facilityForm.payment_terms} onChange={(e) => setFacilityForm({...facilityForm, payment_terms: parseInt(e.target.value) || 1})} className={inputClass + ' flex-1'} />
-                                            <select value={facilityForm.payment_terms_unit || 'days'} onChange={(e) => setFacilityForm({...facilityForm, payment_terms_unit: e.target.value})} className={inputClass + ' w-28'}>
+                                            <input type="number" min="1" value={facilityForm.payment_terms} onChange={(e) => setFacilityForm({...facilityForm, payment_terms: parseInt(e.target.value) || 1})} className={`${inlineInputClass} flex-1`} />
+                                            <select value={facilityForm.payment_terms_unit || 'days'} onChange={(e) => setFacilityForm({...facilityForm, payment_terms_unit: e.target.value})} className={`${inlineInputClass} w-28`}>
                                                 <option value="days">Days</option>
                                                 <option value="weeks">Weeks</option>
                                                 <option value="months">Months</option>
@@ -3587,8 +3823,8 @@ ${window.location.origin}/api/v1/products`}
                                     <div>
                                         <label className={labelClass}>Grace Period</label>
                                         <div className="flex gap-2">
-                                            <input type="number" min="0" value={facilityForm.grace_period} onChange={(e) => setFacilityForm({...facilityForm, grace_period: parseInt(e.target.value) || 0})} className={inputClass + ' flex-1'} />
-                                            <select value={facilityForm.grace_period_unit || 'days'} onChange={(e) => setFacilityForm({...facilityForm, grace_period_unit: e.target.value})} className={inputClass + ' w-28'}>
+                                            <input type="number" min="0" value={facilityForm.grace_period} onChange={(e) => setFacilityForm({...facilityForm, grace_period: parseInt(e.target.value) || 0})} className={`${inlineInputClass} flex-1`} />
+                                            <select value={facilityForm.grace_period_unit || 'days'} onChange={(e) => setFacilityForm({...facilityForm, grace_period_unit: e.target.value})} className={`${inlineInputClass} w-28`}>
                                                 <option value="days">Days</option>
                                                 <option value="weeks">Weeks</option>
                                                 <option value="months">Months</option>
@@ -3662,6 +3898,97 @@ ${window.location.origin}/api/v1/products`}
                     </div>
                 );
 
+            case 'danger':
+                return (
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="text-lg font-semibold text-red-700">Danger Zone</h3>
+                            <p className="text-sm text-slate-500 mt-1">Irreversible actions that affect the entire system. Proceed with extreme caution.</p>
+                        </div>
+
+                        {/* Reset Application */}
+                        <Card className="border-2 border-red-200">
+                            <CardBody className="p-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                                        <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-base font-semibold text-red-700 mb-1">Reset Application to Default</h4>
+                                        <p className="text-sm text-slate-600 mb-4">
+                                            This will permanently delete <strong>all company data</strong> — including tenants, users, products, inventory,
+                                            sales orders, purchase orders, production records, and all settings. The system will return to
+                                            the initial setup wizard. <strong className="text-red-700">This cannot be undone.</strong>
+                                        </p>
+                                        <Button variant="danger" onClick={() => { setShowResetModal(true); setResetConfirmText(''); }}>
+                                            Reset Application to Default
+                                        </Button>
+                                    </div>
+                                </div>
+                            </CardBody>
+                        </Card>
+
+                        {/* Reset confirmation modal */}
+                        {showResetModal && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                                            <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                            </svg>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-red-700">Confirm Reset</h3>
+                                    </div>
+
+                                    <p className="text-sm text-slate-700 mb-1">
+                                        You are about to <strong>permanently erase all company data</strong> and return the system to factory state.
+                                        All users will be logged out immediately.
+                                    </p>
+                                    <p className="text-sm text-slate-500 mb-4">
+                                        Type <strong className="font-mono text-red-700">RESET</strong> to confirm.
+                                    </p>
+
+                                    <input
+                                        type="text"
+                                        value={resetConfirmText}
+                                        onChange={(e) => setResetConfirmText(e.target.value)}
+                                        placeholder="Type RESET to confirm"
+                                        className="w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100 transition-colors mb-5 font-mono"
+                                        autoFocus
+                                    />
+
+                                    <div className="flex gap-3 justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowResetModal(false)}
+                                            disabled={isResetting}
+                                            className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleResetApplication}
+                                            disabled={resetConfirmText !== 'RESET' || isResetting}
+                                            className={
+                                                'px-5 py-2 text-sm font-semibold text-white rounded-lg transition-colors ' +
+                                                (resetConfirmText === 'RESET' && !isResetting
+                                                    ? 'bg-red-600 hover:bg-red-700'
+                                                    : 'bg-red-300 cursor-not-allowed')
+                                            }
+                                        >
+                                            {isResetting ? 'Resetting...' : 'Yes, Reset Everything'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+
             default:
                 return null;
         }
@@ -3683,9 +4010,13 @@ ${window.location.origin}/api/v1/products`}
                                 key={s.key}
                                 onClick={() => setActiveSection(s.key)}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
-                                    activeSection === s.key
-                                        ? 'bg-blue-50 text-blue-700 border-l-3 border-blue-600'
-                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                    s.key === 'danger'
+                                        ? activeSection === s.key
+                                            ? 'bg-red-50 text-red-700 border-l-3 border-red-600'
+                                            : 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                                        : activeSection === s.key
+                                            ? 'bg-blue-50 text-blue-700 border-l-3 border-blue-600'
+                                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                                 }`}
                             >
                                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

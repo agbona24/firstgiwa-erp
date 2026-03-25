@@ -18,25 +18,62 @@ class InventoryService extends BaseService
 {
     /**
      * Get inventory list with filters.
+     *
+     * Uses Product as the base table with a LEFT JOIN to inventory so that products
+     * without any inventory records still appear (with zero quantities).
      */
     public function listInventory(array $filters = []): LengthAwarePaginator
     {
-        $query = Inventory::with(['product.category', 'warehouse'])
-            ->join('products', 'inventory.product_id', '=', 'products.id')
-            ->select('inventory.*');
+        $perPage = min($filters['per_page'] ?? config('erp.pagination.default'), config('erp.pagination.max'));
+        $warehouseId = !empty($filters['warehouse_id']) ? (int) $filters['warehouse_id'] : null;
+
+        if ($warehouseId) {
+            // Per-warehouse view: one row per product showing qty in that specific warehouse.
+            // LEFT JOIN so all products appear even if not yet stocked in this warehouse.
+            $query = Product::with(['category'])
+                ->leftJoin('inventory', function ($join) use ($warehouseId) {
+                    $join->on('products.id', '=', 'inventory.product_id')
+                         ->where('inventory.warehouse_id', '=', $warehouseId);
+                })
+                ->select([
+                    'products.*',
+                    DB::raw('COALESCE(inventory.quantity, 0) as quantity'),
+                    DB::raw('COALESCE(inventory.reserved_quantity, 0) as reserved_quantity'),
+                    DB::raw('GREATEST(COALESCE(inventory.quantity, 0) - COALESCE(inventory.reserved_quantity, 0), 0) as available_quantity'),
+                    DB::raw('1 as warehouse_count'),
+                ])
+                ->whereNull('products.deleted_at');
+        } else {
+            // Product-centric view: one row per product, aggregated across all warehouses.
+            // Subquery LEFT JOIN ensures products with no inventory rows still appear.
+            $inventorySub = DB::table('inventory')
+                ->select([
+                    'product_id',
+                    DB::raw('SUM(quantity) as total_quantity'),
+                    DB::raw('SUM(reserved_quantity) as total_reserved'),
+                    DB::raw('COUNT(DISTINCT warehouse_id) as warehouse_count'),
+                ])
+                ->groupBy('product_id');
+
+            $query = Product::with(['category'])
+                ->leftJoinSub($inventorySub, 'inv', fn ($j) => $j->on('products.id', '=', 'inv.product_id'))
+                ->select([
+                    'products.*',
+                    DB::raw('COALESCE(inv.total_quantity, 0) as quantity'),
+                    DB::raw('COALESCE(inv.total_reserved, 0) as reserved_quantity'),
+                    DB::raw('GREATEST(COALESCE(inv.total_quantity, 0) - COALESCE(inv.total_reserved, 0), 0) as available_quantity'),
+                    DB::raw('COALESCE(inv.warehouse_count, 0) as warehouse_count'),
+                ])
+                ->whereNull('products.deleted_at');
+        }
 
         // Search
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('products.name', 'like', "%{$search}%")
-                    ->orWhere('products.sku', 'like', "%{$search}%");
+                  ->orWhere('products.sku', 'like', "%{$search}%");
             });
-        }
-
-        // Filter by warehouse
-        if (!empty($filters['warehouse_id'])) {
-            $query->where('inventory.warehouse_id', $filters['warehouse_id']);
         }
 
         // Filter by category
@@ -51,21 +88,23 @@ class InventoryService extends BaseService
 
         // Filter by stock status
         if (!empty($filters['status'])) {
+            $qtyExpr = $warehouseId
+                ? 'COALESCE(inventory.quantity, 0)'
+                : 'COALESCE(inv.total_quantity, 0)';
             match ($filters['status']) {
-                'low_stock' => $query->whereRaw('inventory.quantity <= products.reorder_level AND inventory.quantity > products.critical_level'),
-                'critical' => $query->whereRaw('inventory.quantity <= products.critical_level'),
-                'out_of_stock' => $query->where('inventory.quantity', '<=', 0),
-                'in_stock' => $query->where('inventory.quantity', '>', 0),
-                default => null,
+                'low_stock'    => $query->whereRaw("{$qtyExpr} <= products.reorder_level AND {$qtyExpr} > products.critical_level"),
+                'critical'     => $query->whereRaw("{$qtyExpr} <= products.critical_level AND {$qtyExpr} > 0"),
+                'out_of_stock' => $query->whereRaw("{$qtyExpr} <= 0"),
+                'in_stock'     => $query->whereRaw("{$qtyExpr} > 0"),
+                default        => null,
             };
         }
 
-        // Sorting
-        $sortBy = $filters['sort_by'] ?? 'products.name';
-        $sortOrder = $filters['sort_order'] ?? 'asc';
+        // Sorting — validate column to prevent SQL injection
+        $allowedSort = ['products.name', 'products.sku', 'products.cost_price', 'products.created_at', 'products.updated_at'];
+        $sortBy    = in_array($filters['sort_by'] ?? '', $allowedSort) ? $filters['sort_by'] : 'products.name';
+        $sortOrder = ($filters['sort_order'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
         $query->orderBy($sortBy, $sortOrder);
-
-        $perPage = min($filters['per_page'] ?? config('erp.pagination.default'), config('erp.pagination.max'));
 
         return $query->paginate($perPage);
     }

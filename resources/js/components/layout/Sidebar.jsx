@@ -8,6 +8,10 @@ export default function Sidebar({ isCollapsed, onToggle, isMobileOpen, onMobileC
     const { user } = useAuth();
     const [companyLogoUrl, setCompanyLogoUrl] = useState(() => localStorage.getItem('company_logo_url') || '');
     const [companyName, setCompanyName] = useState(() => localStorage.getItem('company_name') || 'FactoryPulse');
+    const [isDesktop, setIsDesktop] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia('(min-width: 1024px)').matches;
+    });
 
     const normalizeLogoUrl = (value) => {
         if (!value) return '';
@@ -55,14 +59,63 @@ export default function Sidebar({ isCollapsed, onToggle, isMobileOpen, onMobileC
         };
     }, []);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const mediaQuery = window.matchMedia('(min-width: 1024px)');
+        const handleChange = (event) => setIsDesktop(event.matches);
+        setIsDesktop(mediaQuery.matches);
+        mediaQuery.addEventListener('change', handleChange);
+
+        return () => {
+            mediaQuery.removeEventListener('change', handleChange);
+        };
+    }, []);
+
     const isActive = (path) => {
         return location.pathname === path || location.pathname.startsWith(path + '/');
     };
 
     // Check if user has any of the given permissions (or is Super Admin)
-    const userPermissions = user?.all_permissions || [];
-    const userRoles = (user?.roles || []).map(r => r.name);
-    const isSuperAdmin = userRoles.includes('Super Admin') || userRoles.includes('Admin');
+    const userPermissions = useMemo(() => {
+        const normalizePermissionList = (value) => {
+            if (!value) return [];
+
+            if (Array.isArray(value)) {
+                return value
+                    .map(permission => (typeof permission === 'string' ? permission : permission?.name))
+                    .filter(Boolean);
+            }
+
+            if (value && typeof value === 'object') {
+                return Object.keys(value).filter(key => Boolean(value[key]));
+            }
+
+            return [];
+        };
+
+        const directPermissions = normalizePermissionList(user?.all_permissions);
+        const fallbackPermissions = normalizePermissionList(user?.permissions);
+        const rolePermissions = Array.isArray(user?.roles)
+            ? user.roles
+                .flatMap(role => normalizePermissionList(role?.permissions))
+            : [];
+
+        return [...new Set([...directPermissions, ...fallbackPermissions, ...rolePermissions])];
+    }, [user]);
+
+    const userRoles = useMemo(() => {
+        const roles = user?.roles || [];
+        if (!Array.isArray(roles)) return [];
+        return roles
+            .map(role => (typeof role === 'string' ? role : role?.name))
+            .filter(Boolean);
+    }, [user?.roles]);
+
+    const isSuperAdmin = userRoles.some(role => {
+        const normalizedRole = String(role).toLowerCase();
+        return normalizedRole === 'super admin' || normalizedRole === 'admin' || normalizedRole.includes('super') || normalizedRole.includes('admin');
+    });
+    const isSidebarVisible = isDesktop || isMobileOpen;
 
     const hasPermission = (requiredPermissions) => {
         if (!requiredPermissions || requiredPermissions.length === 0) return true;
@@ -167,7 +220,7 @@ export default function Sidebar({ isCollapsed, onToggle, isMobileOpen, onMobileC
                 {
                     name: 'Customers',
                     path: '/customers',
-                    permissions: ['sales.view'],
+                    permissions: ['customers.view'],
                     icon: (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -336,7 +389,7 @@ export default function Sidebar({ isCollapsed, onToggle, isMobileOpen, onMobileC
     return (
         <>
             {/* Mobile Overlay */}
-            {isMobileOpen && (
+            {!isDesktop && isMobileOpen && (
                 <div
                     className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
                     onClick={onMobileClose}
@@ -348,7 +401,7 @@ export default function Sidebar({ isCollapsed, onToggle, isMobileOpen, onMobileC
                 ${isCollapsed ? 'w-20' : 'w-64'}
                 h-screen bg-slate-50 border-r border-slate-200 overflow-y-auto transition-all duration-300
                 fixed lg:relative z-50
-                ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                ${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'}
             `}>
                 {/* Collapse Toggle (Desktop only) */}
                 <div className="hidden lg:flex justify-end p-4">

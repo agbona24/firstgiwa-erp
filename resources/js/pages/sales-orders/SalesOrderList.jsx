@@ -36,6 +36,7 @@ export default function SalesOrderList() {
     const [fulfillmentLoading, setFulfillmentLoading] = useState(false);
     const [expandedRow, setExpandedRow] = useState(null);
     const [showItemsModal, setShowItemsModal] = useState(null);
+    const [detailTab, setDetailTab] = useState('items');
     const [loading, setLoading] = useState(true);
     const [orders, setOrders] = useState([]);
     const [products, setProducts] = useState([]);
@@ -175,6 +176,13 @@ export default function SalesOrderList() {
                     quantity: item.quantity || 0,
                     price: parseFloat(item.unit_price) || 0,
                     total: parseFloat(item.line_total || item.total_amount) || (item.quantity * parseFloat(item.unit_price)) || 0
+                })),
+                charges: (order.charges || []).map(c => ({
+                    id: c.id,
+                    name: c.charge_name,
+                    amount: parseFloat(c.charge_amount) || 0,
+                    add_to_credit: !!c.add_to_credit,
+                    credited: !!c.credited,
                 }))
             }));
 
@@ -1004,6 +1012,16 @@ export default function SalesOrderList() {
                                     </tbody>
                                     <tfoot className="bg-slate-50 border-t-2 border-slate-200">
                                         <tr>
+                                            <td colSpan="3" className="px-4 py-2 text-sm font-medium text-slate-600 text-right">Subtotal:</td>
+                                            <td className="px-4 py-2 text-sm font-mono font-semibold text-right">{fmt(showItemsModal.lineItems?.reduce((s,i) => s + i.total, 0) || 0)}</td>
+                                        </tr>
+                                        {showItemsModal.charges?.map((c, i) => (
+                                            <tr key={i}>
+                                                <td colSpan="3" className="px-4 py-1 text-xs text-slate-500 text-right">{c.name}:</td>
+                                                <td className="px-4 py-1 text-xs font-mono text-orange-600 text-right">{fmt(c.amount)}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="border-t border-slate-300">
                                             <td colSpan="3" className="px-4 py-3 text-sm font-semibold text-slate-700 text-right">Order Total:</td>
                                             <td className="px-4 py-3 text-sm font-mono font-bold text-blue-700 text-right">{fmt(showItemsModal.total)}</td>
                                         </tr>
@@ -1026,7 +1044,7 @@ export default function SalesOrderList() {
             )}
 
             {/* Order Detail SlideOut */}
-            <SlideOut isOpen={!!selectedOrder} onClose={() => setSelectedOrder(null)} title={`SO: ${selectedOrder?.so_number || ''}`} size="lg">
+            <SlideOut isOpen={!!selectedOrder} onClose={() => { setSelectedOrder(null); setDetailTab('items'); }} title={`SO: ${selectedOrder?.so_number || ''}`} size="lg">
                 {selectedOrder && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -1037,9 +1055,20 @@ export default function SalesOrderList() {
                             <div><p className="text-xs text-slate-500">Total</p><p className="font-bold text-slate-900">{fmt(selectedOrder.total)}</p></div>
                             <div><p className="text-xs text-slate-500">Fulfillment</p><Badge variant={selectedOrder.fulfillmentStatus === 'delivered' ? 'completed' : 'pending'}>{selectedOrder.fulfillmentStatus}</Badge></div>
                         </div>
-                        {selectedOrder.lineItems.length > 0 && (
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-slate-200">
+                            <button onClick={() => setDetailTab('items')} className={`px-4 py-2 text-sm font-medium border-b-2 transition -mb-px ${ detailTab === 'items' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                                Line Items ({selectedOrder.lineItems.length})
+                            </button>
+                            <button onClick={() => setDetailTab('charges')} className={`px-4 py-2 text-sm font-medium border-b-2 transition -mb-px ${ detailTab === 'charges' ? 'border-orange-500 text-orange-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                                Charges {selectedOrder.charges?.length > 0 && `(${selectedOrder.charges.length})`}
+                            </button>
+                        </div>
+
+                        {/* Line Items Tab */}
+                        {detailTab === 'items' && selectedOrder.lineItems.length > 0 && (
                             <div>
-                                <h4 className="font-semibold text-slate-900 mb-3">Line Items</h4>
                                 <table className="w-full text-sm">
                                     <thead><tr className="border-b text-left text-slate-500"><th className="py-2">Product</th><th className="text-right">Qty</th><th className="text-right">Unit Price</th><th className="text-right">Total</th></tr></thead>
                                     <tbody>
@@ -1052,7 +1081,56 @@ export default function SalesOrderList() {
                                             </tr>
                                         ))}
                                     </tbody>
+                                    <tfoot className="border-t-2 border-slate-200">
+                                        <tr><td colSpan="3" className="py-2 text-right text-slate-600 font-medium">Subtotal</td><td className="text-right font-bold">{fmt(selectedOrder.lineItems.reduce((s,i) => s + i.total, 0))}</td></tr>
+                                        {selectedOrder.charges?.length > 0 && selectedOrder.charges.map((c,i) => (
+                                            <tr key={i}><td colSpan="3" className="py-1 text-right text-slate-500 text-xs">{c.name}</td><td className="text-right text-sm text-orange-700">{fmt(c.amount)}</td></tr>
+                                        ))}
+                                        {selectedOrder.charges?.length > 0 && <tr className="border-t"><td colSpan="3" className="py-2 text-right text-slate-700 font-semibold">Grand Total</td><td className="text-right font-bold text-blue-700">{fmt(selectedOrder.total)}</td></tr>}
+                                    </tfoot>
                                 </table>
+                            </div>
+                        )}
+                        {detailTab === 'items' && selectedOrder.lineItems.length === 0 && (
+                            <p className="text-center text-slate-400 py-8 text-sm">No line items</p>
+                        )}
+
+                        {/* Charges Tab */}
+                        {detailTab === 'charges' && (
+                            <div>
+                                {selectedOrder.charges?.length > 0 ? (
+                                    <table className="w-full text-sm">
+                                        <thead><tr className="border-b text-left text-slate-500"><th className="py-2">Charge</th><th className="text-right py-2">Amount</th><th className="text-right py-2">Credit</th></tr></thead>
+                                        <tbody>
+                                            {selectedOrder.charges.map((c, i) => (
+                                                <tr key={i} className="border-b">
+                                                    <td className="py-3">
+                                                        <p className="font-medium text-slate-900">{c.name}</p>
+                                                        {c.credited && <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">Credited ✓</span>}
+                                                    </td>
+                                                    <td className="text-right font-mono font-semibold text-orange-700">{fmt(c.amount)}</td>
+                                                    <td className="text-right">
+                                                        {c.add_to_credit
+                                                            ? <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Adds to credit</span>
+                                                            : <span className="text-xs text-slate-400">—</span>}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot className="border-t-2 border-slate-200">
+                                            <tr>
+                                                <td className="py-2 font-semibold text-slate-700">Total Charges</td>
+                                                <td className="text-right font-bold text-orange-700">{fmt(selectedOrder.charges.reduce((s,c) => s + c.amount, 0))}</td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <svg className="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                        <p className="text-slate-400 text-sm">No charges on this order</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

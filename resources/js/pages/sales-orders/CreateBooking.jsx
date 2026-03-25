@@ -4,7 +4,7 @@ import Button from '../../components/ui/Button';
 import { Card, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import { useToast } from '../../contexts/ToastContext';
-import { bankAccountsAPI, taxesAPI } from '../../services/settingsAPI';
+import { bankAccountsAPI, taxesAPI, saleChargesAPI } from '../../services/settingsAPI';
 import customerAPI from '../../services/customerAPI';
 import formulaAPI from '../../services/formulaAPI';
 import salesOrderAPI from '../../services/salesOrderAPI';
@@ -29,6 +29,8 @@ export default function CreateBooking() {
     const [formulaId, setFormulaId] = useState('');
     const [totalQty, setTotalQty] = useState('');
     const [directItems, setDirectItems] = useState([{ product: '', quantity: '', unit: 'KG', unit_price: '' }]);
+    const [fdoOfficer, setFdoOfficer] = useState('');
+    const [serviceCharges, setServiceCharges] = useState([]);
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
@@ -37,6 +39,8 @@ export default function CreateBooking() {
     const [bankAccounts, setBankAccounts] = useState([]);
     const [taxes, setTaxes] = useState([]);
     const [formulas, setFormulas] = useState([]);
+    const [availableCharges, setAvailableCharges] = useState([]);
+    const [selectedDeliveryCharges, setSelectedDeliveryCharges] = useState([]); // from Settings
     const [loadingData, setLoadingData] = useState(true);
 
     // Fetch customers, bank accounts, taxes, and formulas on mount
@@ -44,11 +48,12 @@ export default function CreateBooking() {
         const fetchData = async () => {
             try {
                 setLoadingData(true);
-                const [customersRes, bankAccountsRes, taxesRes, formulasRes] = await Promise.all([
+                const [customersRes, bankAccountsRes, taxesRes, formulasRes, chargesRes] = await Promise.all([
                     customerAPI.getCustomers({ per_page: 1000 }).catch(() => ({ data: [] })),
                     bankAccountsAPI.list().catch(() => ({ data: { bank_accounts: [] } })),
                     taxesAPI.list().catch(() => ({ data: { taxes: [] } })),
                     formulaAPI.getFormulas({ per_page: 100, is_active: true }).catch(() => ({ data: [] })),
+                    saleChargesAPI.list({ context: 'sales_order', active_only: true }).catch(() => ({ data: { data: { charges: [] } } })),
                 ]);
                 
                 console.log('Customers response:', customersRes);
@@ -62,6 +67,9 @@ export default function CreateBooking() {
                 
                 const taxesList = taxesRes?.data?.data?.taxes || taxesRes?.data?.taxes || [];
                 setTaxes(taxesList.filter(t => t.is_active));
+
+                const chargesList = chargesRes?.data?.data?.charges || [];
+                setAvailableCharges(Array.isArray(chargesList) ? chargesList : []);
                 
                 console.log('Formulas response:', formulasRes);
                 const formulasList = Array.isArray(formulasRes) ? formulasRes : formulasRes?.data || [];
@@ -84,7 +92,7 @@ export default function CreateBooking() {
         ? ((selectedCustomer.credit_used || 0) / selectedCustomer.credit_limit) * 100
         : 0;
 
-    const canSelectCredit = selectedCustomer && (selectedCustomer.customer_type === 'credit' || selectedCustomer.customer_type === 'both') && !selectedCustomer.credit_blocked;
+    const canSelectCredit = selectedCustomer && ['credit', 'both'].includes(selectedCustomer.customer_type) && !selectedCustomer.credit_blocked;
 
     // Compute line items from formula
     const formulaLineItems = useMemo(() => {
@@ -120,6 +128,8 @@ export default function CreateBooking() {
     const lineItems = orderType === 'formula' ? formulaLineItems : directLineItems;
 
     const subtotal = useMemo(() => lineItems.reduce((sum, i) => sum + i.line_total, 0), [lineItems]);
+    const serviceChargesTotal = useMemo(() => serviceCharges.reduce((sum, c) => sum + (Number(c.amount) || 0), 0), [serviceCharges]);
+    const deliveryChargesTotal = useMemo(() => selectedDeliveryCharges.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0), [selectedDeliveryCharges]);
 
     // Calculate tax from settings
     const taxDetails = useMemo(() => {
@@ -133,9 +143,19 @@ export default function CreateBooking() {
         return { breakdown, total: totalTax };
     }, [subtotal, taxes]);
 
-    const grandTotal = subtotal + taxDetails.total;
+    const grandTotal = subtotal + serviceChargesTotal + deliveryChargesTotal + taxDetails.total;
 
     const exceedsCredit = paymentType === 'credit' && selectedCustomer && grandTotal > creditAvailable;
+
+    function addServiceCharge() {
+        setServiceCharges([...serviceCharges, { name: '', quantity: '', amount: '' }]);
+    }
+    function removeServiceCharge(idx) {
+        setServiceCharges(serviceCharges.filter((_, i) => i !== idx));
+    }
+    function updateServiceCharge(idx, field, value) {
+        setServiceCharges(serviceCharges.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+    }
 
     // Step validation - require bank account selection when bank_transfer is chosen
     const canProceedStep0 = selectedCustomer && 
@@ -184,6 +204,29 @@ export default function CreateBooking() {
                     unit_price: parseFloat(item.unit_price),
                 }));
             }
+
+            // Service charges (CRUSHING, PELLETING, etc.)
+            if (serviceCharges.length > 0) {
+                payload.service_charges = serviceCharges
+                    .filter(c => c.name && Number(c.amount) > 0)
+                    .map(c => ({
+                        name: c.name,
+                        quantity: parseFloat(c.quantity) || 0,
+                        amount: parseFloat(c.amount),
+                    }));
+            }
+
+            // Delivery charges from Settings
+            if (selectedDeliveryCharges.length > 0) {
+                payload.charges = selectedDeliveryCharges.map(c => ({
+                    sale_charge_id: c.id,
+                    charge_name: c.name,
+                    charge_amount: parseFloat(c.amount) || 0,
+                    add_to_credit: !!c.add_to_credit,
+                }));
+            }
+
+            if (fdoOfficer) payload.fdo_officer = fdoOfficer;
 
             console.log('Submitting sales order:', payload);
             const response = await salesOrderAPI.createSalesOrder(payload);
@@ -291,6 +334,18 @@ export default function CreateBooking() {
                             <p className="text-xs text-slate-500 mt-1">{creditUtilization.toFixed(1)}% utilised</p>
                         </div>
                     )}
+
+                    {/* FDO Officer */}
+                    <div className="mb-6">
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">F.D.O (Field Dispatch Officer)</label>
+                        <input
+                            type="text"
+                            value={fdoOfficer}
+                            onChange={(e) => setFdoOfficer(e.target.value)}
+                            placeholder="Officer name (optional)"
+                            className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        />
+                    </div>
 
                     {/* Order type */}
                     <div className="mb-6">
@@ -598,11 +653,111 @@ export default function CreateBooking() {
 
                     {/* Running subtotal */}
                     {lineItems.length > 0 && (
-                        <div className="mt-6 flex justify-end">
-                            <div className="bg-slate-50 border border-slate-200 rounded-lg px-6 py-3 text-right">
-                                <span className="text-sm text-slate-500">Subtotal</span>
-                                <p className="text-xl font-bold text-slate-900">{fmt(subtotal)}</p>
+                        <div className="mt-6">
+                            {/* Service Charges (CRUSHING, PELLETING, etc.) */}
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-sm font-semibold text-slate-700">Service Charges <span className="font-normal text-slate-400">(CRUSHING, PELLETING, etc.)</span></label>
+                                    <button type="button" onClick={addServiceCharge} className="text-xs text-blue-600 hover:text-blue-800 font-medium border border-blue-300 rounded px-2 py-1">+ Add Charge</button>
+                                </div>
+                                {serviceCharges.length > 0 && (
+                                    <div className="space-y-2">
+                                        {serviceCharges.map((charge, idx) => (
+                                            <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                                                <div className="col-span-5">
+                                                    {idx === 0 && <label className="block text-xs text-slate-500 mb-1">Service Name</label>}
+                                                    <input type="text" value={charge.name} onChange={(e) => updateServiceCharge(idx, 'name', e.target.value)} placeholder="e.g. CRUSHING" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                                                </div>
+                                                <div className="col-span-3">
+                                                    {idx === 0 && <label className="block text-xs text-slate-500 mb-1">Quantity</label>}
+                                                    <input type="number" min="0" value={charge.quantity} onChange={(e) => updateServiceCharge(idx, 'quantity', e.target.value)} placeholder="0" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                                                </div>
+                                                <div className="col-span-3">
+                                                    {idx === 0 && <label className="block text-xs text-slate-500 mb-1">Amount ({window.getCurrencySymbol?.() || '₦'})</label>}
+                                                    <input type="number" min="0" value={charge.amount} onChange={(e) => updateServiceCharge(idx, 'amount', e.target.value)} placeholder="0.00" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                                                </div>
+                                                <div className="col-span-1 flex justify-center">
+                                                    <button type="button" onClick={() => removeServiceCharge(idx)} className="text-red-400 hover:text-red-600 p-1">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
+
+                            <div className="flex justify-end">
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg px-6 py-3 text-right space-y-1">
+                                    <div className="text-sm text-slate-500">Materials: <span className="font-semibold text-slate-700">{fmt(subtotal)}</span></div>
+                                    {serviceChargesTotal > 0 && <div className="text-sm text-slate-500">Services: <span className="font-semibold text-slate-700">{fmt(serviceChargesTotal)}</span></div>}
+                                    {deliveryChargesTotal > 0 && <div className="text-sm text-slate-500">Delivery charges: <span className="font-semibold text-orange-700">{fmt(deliveryChargesTotal)}</span></div>}
+                                    <div className="border-t pt-1 mt-1">
+                                        <span className="text-sm text-slate-500">Total</span>
+                                        <p className="text-xl font-bold text-slate-900">{fmt(subtotal + serviceChargesTotal + deliveryChargesTotal)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Delivery / Transport Charges from Settings */}
+                            {availableCharges.length > 0 && (
+                                <div className="mt-4 border border-slate-200 rounded-lg p-4">
+                                    <div className="text-sm font-semibold text-slate-700 mb-3">Delivery / Transport Charges</div>
+                                    <div className="space-y-2">
+                                        {availableCharges.map(charge => {
+                                            const selected = selectedDeliveryCharges.find(c => c.id === charge.id);
+                                            const defaultAmt = charge.amount_type === 'percentage'
+                                                ? ((subtotal) * parseFloat(charge.default_amount)) / 100
+                                                : parseFloat(charge.default_amount);
+                                            return (
+                                                <div key={charge.id} className="flex items-center gap-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        id={`dcharge-${charge.id}`}
+                                                        checked={!!selected}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setSelectedDeliveryCharges(prev => [...prev, {
+                                                                    id: charge.id,
+                                                                    name: charge.name,
+                                                                    amount: defaultAmt,
+                                                                    add_to_credit: !!charge.add_to_credit,
+                                                                    allow_override: charge.allow_override !== false,
+                                                                }]);
+                                                            } else {
+                                                                setSelectedDeliveryCharges(prev => prev.filter(c => c.id !== charge.id));
+                                                            }
+                                                        }}
+                                                        className="w-4 h-4 text-orange-600 border-slate-300 rounded flex-shrink-0"
+                                                    />
+                                                    <label htmlFor={`dcharge-${charge.id}`} className="text-sm text-slate-700 flex-1 cursor-pointer">
+                                                        {charge.name}
+                                                        {charge.add_to_credit && <span className="ml-1 text-xs text-blue-600">(adds to credit on delivery)</span>}
+                                                    </label>
+                                                    {selected ? (
+                                                        charge.allow_override !== false ? (
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                value={selected.amount}
+                                                                onChange={(e) => setSelectedDeliveryCharges(prev => prev.map(c => c.id === charge.id ? { ...c, amount: e.target.value } : c))}
+                                                                className="w-28 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-mono text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-sm font-mono w-28 text-right text-slate-700 font-semibold">{fmt(parseFloat(selected.amount) || 0)} 🔒</span>
+                                                        )
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 font-mono w-28 text-right">
+                                                            {charge.amount_type === 'percentage' ? `${charge.default_amount}%` : fmt(defaultAmt)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -647,6 +802,12 @@ export default function CreateBooking() {
                                 <span className="text-xs text-slate-500 uppercase tracking-wider">Payment Type</span>
                                 <p className="font-semibold text-slate-900 capitalize">{paymentType}</p>
                             </div>
+                            {fdoOfficer && (
+                                <div>
+                                    <span className="text-xs text-slate-500 uppercase tracking-wider">F.D.O</span>
+                                    <p className="font-semibold text-slate-900">{fdoOfficer}</p>
+                                </div>
+                            )}
                             {orderType === 'formula' && selectedFormula && (
                                 <div>
                                     <span className="text-xs text-slate-500 uppercase tracking-wider">Formula</span>
@@ -686,6 +847,16 @@ export default function CreateBooking() {
                                             <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(item.line_total)}</td>
                                         </tr>
                                     ))}
+                                    {serviceCharges.filter(c => c.name && Number(c.amount) > 0).map((charge, i) => (
+                                        <tr key={`sc-${i}`} className="border-b border-slate-100 bg-amber-50">
+                                            <td className="px-4 py-3 text-slate-400">{lineItems.length + i + 1}</td>
+                                            <td className="px-4 py-3 text-slate-900 font-semibold">{charge.name} <span className="text-xs text-amber-600 font-normal ml-1">(service)</span></td>
+                                            <td className="px-4 py-3 text-right text-slate-900">{charge.quantity || '—'}</td>
+                                            <td className="px-4 py-3 text-slate-500">—</td>
+                                            <td className="px-4 py-3 text-right text-slate-500">—</td>
+                                            <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmt(charge.amount)}</td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -694,19 +865,31 @@ export default function CreateBooking() {
                         <div className="mt-4 flex justify-end">
                             <div className="w-72 space-y-2">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600">Subtotal</span>
-                                    <span className="font-semibold text-slate-900">{fmt(subtotal)}</span>
+                                            <span className="text-slate-600">Materials</span>
+                                            <span className="font-semibold text-slate-900">{fmt(subtotal)}</span>
+                                        </div>
+                                        {serviceChargesTotal > 0 && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-slate-600">Service Charges</span>
+                                                <span className="font-semibold text-slate-900">{fmt(serviceChargesTotal)}</span>
+                                            </div>
+                                        )}
+                                        {deliveryChargesTotal > 0 && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-slate-600">Delivery Charges</span>
+                                                <span className="font-semibold text-orange-700">{fmt(deliveryChargesTotal)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-slate-500">Taxes</span>
+                                            <span className="text-slate-400 italic">Applied at invoice stage</span>
+                                        </div>
+                                                        <div className="border-t border-slate-200 pt-2 flex justify-between">
+                                            <span className="font-bold text-slate-900">Grand Total</span>
+                                            <span className="font-bold text-lg text-blue-700">{fmt(subtotal + serviceChargesTotal + deliveryChargesTotal)}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">Taxes</span>
-                                    <span className="text-slate-400 italic">Applied at invoice stage</span>
-                                </div>
-                                <div className="border-t border-slate-200 pt-2 flex justify-between">
-                                    <span className="font-bold text-slate-900">Grand Total</span>
-                                    <span className="font-bold text-lg text-blue-700">{fmt(subtotal)}</span>
-                                </div>
-                            </div>
-                        </div>
 
                         {/* Credit warning */}
                         {exceedsCredit && (

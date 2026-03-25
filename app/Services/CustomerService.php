@@ -26,9 +26,14 @@ class CustomerService extends BaseService
             });
         }
 
-        // Filter by type
+        // Filter by payment type
         if (!empty($filters['customer_type'])) {
             $query->where('customer_type', $filters['customer_type']);
+        }
+
+        // Filter by category
+        if (!empty($filters['customer_category'])) {
+            $query->where('customer_category', $filters['customer_category']);
         }
 
         // Filter by status
@@ -112,7 +117,7 @@ class CustomerService extends BaseService
             $customer = Customer::findOrFail($id);
 
             // If changing from credit to cash, check outstanding balance
-            if (isset($data['customer_type']) && $data['customer_type'] === 'cash') {
+            if (isset($data['customer_type']) && $data['customer_type'] === 'cash' && $customer->customer_type !== 'cash') {
                 if ($customer->outstanding_balance > 0) {
                     throw new BusinessRuleException(
                         'Cannot change to cash-only customer with outstanding balance of ' . 
@@ -179,7 +184,7 @@ class CustomerService extends BaseService
         return $this->transaction(function () use ($id, $data, $reason) {
             $customer = Customer::findOrFail($id);
 
-            if ($customer->customer_type === 'cash') {
+            if ($customer->customer_type === 'cash' && ($data['customer_type'] ?? 'cash') === 'cash') {
                 throw new BusinessRuleException('Cannot set credit facility for cash-only customer');
             }
 
@@ -215,7 +220,7 @@ class CustomerService extends BaseService
             $customer = Customer::findOrFail($id);
 
             if ($customer->customer_type === 'cash') {
-                throw new BusinessRuleException('Cannot block credit for cash-only customer');
+                throw new BusinessRuleException('Cannot block/unblock credit for a cash customer — change payment type to Credit or Both first');
             }
 
             $customer->setAuditReason($reason);

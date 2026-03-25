@@ -39,6 +39,9 @@ class StoreProductRequest extends FormRequest
             'image_url' => ['nullable', 'string', 'max:500'],
             'is_active' => ['boolean'],
             'track_inventory' => ['boolean'],
+            // warehouse_id is NOT stored on the product itself — ProductService
+            // uses it to seed the initial inventory record(s).
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ];
     }
 

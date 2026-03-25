@@ -48,11 +48,11 @@ export default function Dashboard() {
     });
 
     useEffect(() => {
-        if (!tourComplete) {
+        if (!tourComplete && user) {
             const timer = setTimeout(() => startTour(), 500);
             return () => clearTimeout(timer);
         }
-    }, [tourComplete, startTour]);
+    }, [tourComplete, startTour, user]);
 
     // Fetch all dashboard data
     useEffect(() => {

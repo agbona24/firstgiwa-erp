@@ -20,6 +20,8 @@ class Product extends Model
     public const TYPE_PACKAGING = 'packaging';
 
     protected $fillable = [
+        'tenant_id',
+        'branch_id',
         'sku',
         'name',
         'description',

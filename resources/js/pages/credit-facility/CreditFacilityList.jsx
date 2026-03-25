@@ -25,6 +25,12 @@ export default function CreditFacilityList() {
     const [filterStatus, setFilterStatus] = useState('all');
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState('overview'); // overview, transactions, payments
+    const [expandedTxns, setExpandedTxns] = useState(new Set());
+    const toggleTxn = (id) => setExpandedTxns(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
 
     const [form, setForm] = useState({
         customer_id: '',
@@ -53,7 +59,7 @@ export default function CreditFacilityList() {
             setAllCustomers(customerList);
             
             // Filter to only show customers with credit type or credit limit > 0
-            // Note: customer types can be credit, wholesale, retail, distributor, walk-in
+            // Note: customer types can be credit, wholesale, retail, distributor, walk-in (Cash Booking)
             const creditCustomers = customerList.filter(c => 
                 c.customer_type === 'credit' || 
                 c.customer_type === 'wholesale' ||
@@ -566,12 +572,13 @@ export default function CreditFacilityList() {
                             )}
                         </div>
                         <div>
-                            <label className={labelClass}>Payment Terms (days)</label>
+                            <label className={labelClass}>
+                                Payment Terms {selectedFacilityType ? `(${selectedFacilityType.payment_terms_unit || 'days'})` : '(days)'}
+                            </label>
                             <input 
                                 type="number" 
                                 min="1" 
-                                max="365" 
-                                value={form.payment_terms_days} 
+                                value={selectedFacilityType ? selectedFacilityType.payment_terms : form.payment_terms_days} 
                                 onChange={(e) => setForm({...form, payment_terms_days: e.target.value})} 
                                 className={inputClass}
                                 readOnly={!!selectedFacilityType}
@@ -916,34 +923,70 @@ export default function CreditFacilityList() {
                                                             const amount = parseFloat(txn.amount) || 0;
                                                             const balance = parseFloat(txn.balance_remaining) || 0;
                                                             const paid = parseFloat(txn.paid_amount) || (amount - balance);
+                                                            const hasBreakdown = txn.charges_breakdown?.length > 0;
+                                                            const isExpanded = expandedTxns.has(txn.id);
                                                             return (
-                                                                <tr key={txn.id} className="hover:bg-slate-50">
-                                                                    <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                                                                        {txn.reference_number}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm text-slate-500">
-                                                                        {new Date(txn.transaction_date).toLocaleDateString()}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm text-right text-slate-900">
-                                                                        {fmt(amount)}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm text-right text-green-600">
-                                                                        {fmt(paid)}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">
-                                                                        {fmt(balance)}
-                                                                    </td>
-                                                                    <td className="px-4 py-3">
-                                                                        <Badge variant={
-                                                                            txn.status === 'paid' ? 'approved' :
-                                                                            txn.status === 'overdue' ? 'rejected' :
-                                                                            txn.status === 'partial' ? 'warning' : 
-                                                                            txn.status === 'pending' ? 'pending' : 'default'
-                                                                        }>
-                                                                            {txn.status?.charAt(0).toUpperCase() + txn.status?.slice(1) || 'Unknown'}
-                                                                        </Badge>
-                                                                    </td>
-                                                                </tr>
+                                                                <>
+                                                                    <tr
+                                                                        key={txn.id}
+                                                                        className={`hover:bg-slate-50 ${hasBreakdown ? 'cursor-pointer' : ''}`}
+                                                                        onClick={() => hasBreakdown && toggleTxn(txn.id)}
+                                                                    >
+                                                                        <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                                                                            <div className="flex items-center gap-1">
+                                                                                {hasBreakdown && (
+                                                                                    <span className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''} inline-block`}>▶</span>
+                                                                                )}
+                                                                                {txn.reference_number}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-slate-500">
+                                                                            {new Date(txn.transaction_date).toLocaleDateString()}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-right text-slate-900">
+                                                                            {fmt(amount)}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-right text-green-600">
+                                                                            {fmt(paid)}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">
+                                                                            {fmt(balance)}
+                                                                        </td>
+                                                                        <td className="px-4 py-3">
+                                                                            <Badge variant={
+                                                                                txn.status === 'paid' ? 'approved' :
+                                                                                txn.status === 'overdue' ? 'rejected' :
+                                                                                txn.status === 'partial' ? 'warning' :
+                                                                                txn.status === 'pending' ? 'pending' : 'default'
+                                                                            }>
+                                                                                {txn.status?.charAt(0).toUpperCase() + txn.status?.slice(1) || 'Unknown'}
+                                                                            </Badge>
+                                                                        </td>
+                                                                    </tr>
+                                                                    {hasBreakdown && isExpanded && (
+                                                                        <tr key={`${txn.id}-breakdown`} className="bg-slate-50 border-b border-slate-200">
+                                                                            <td colSpan="6" className="px-8 py-3">
+                                                                                <div className="text-xs text-slate-500 space-y-1">
+                                                                                    <div className="font-medium text-slate-600 mb-1">Transaction Breakdown</div>
+                                                                                    <div className="flex justify-between">
+                                                                                        <span className="text-slate-500">Goods / Sales</span>
+                                                                                        <span className="font-medium text-slate-700">{fmt(parseFloat(txn.goods_amount) || 0)}</span>
+                                                                                    </div>
+                                                                                    {txn.charges_breakdown.map((c, i) => (
+                                                                                        <div key={i} className="flex justify-between">
+                                                                                            <span className="text-blue-600">{c.name}</span>
+                                                                                            <span className="font-medium text-blue-700">{fmt(parseFloat(c.amount) || 0)}</span>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                    <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
+                                                                                        <span className="font-semibold text-slate-700">Total (credited)</span>
+                                                                                        <span className="font-semibold text-slate-900">{fmt(amount)}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    )}
+                                                                </>
                                                             );
                                                         })
                                                     ) : (
@@ -1059,7 +1102,7 @@ export default function CreditFacilityList() {
                                                 </div>
                                                 <div>
                                                     <span className="text-slate-500">Customer Type:</span> 
-                                                    <span className="font-medium ml-2 capitalize">{selectedCustomer.customer_type}</span>
+                                                    <span className="font-medium ml-2 capitalize">{selectedCustomer.customer_type === 'walk-in' ? 'Cash Booking' : selectedCustomer.customer_type}</span>
                                                 </div>
                                                 <div>
                                                     <span className="text-slate-500">Total Purchases:</span> 

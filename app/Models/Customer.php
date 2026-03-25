@@ -17,6 +17,7 @@ class Customer extends Model
         'email',
         'phone',
         'customer_type',
+        'customer_category',
         'address',
         'contact_person',
         'credit_limit',
@@ -92,6 +93,11 @@ class Customer extends Model
         return $query->whereIn('customer_type', ['credit', 'both']);
     }
 
+    public function scopeByCategory($query, string $category)
+    {
+        return $query->where('customer_category', $category);
+    }
+
     public function scopeCreditBlocked($query)
     {
         return $query->where('credit_blocked', true);
@@ -124,7 +130,7 @@ class Customer extends Model
         // 2. Customer type is explicitly 'credit' or 'both'
         // AND customer is not blocked and is active
         $hasCreditFacility = $this->credit_limit > 0 || in_array($this->customer_type, ['credit', 'both']);
-        
+
         return $hasCreditFacility 
                && !$this->credit_blocked 
                && $this->is_active;

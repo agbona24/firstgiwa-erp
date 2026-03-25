@@ -33,6 +33,7 @@ class SalesOrder extends Model
         'total_amount',
         'credit_available',
         'notes',
+        'fdo_officer',
         'delivery_address',
         'created_by',
         'approved_by',
@@ -92,6 +93,11 @@ class SalesOrder extends Model
     public function payments()
     {
         return $this->morphMany(Payment::class, 'payable');
+    }
+
+    public function charges()
+    {
+        return $this->morphMany(\App\Models\OrderCharge::class, 'chargeable');
     }
 
     // Scopes

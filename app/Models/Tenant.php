@@ -18,6 +18,8 @@ class Tenant extends Model
         'phone',
         'address',
         'plan',
+        'industry_category',
+        'industry_subcategory',
         'logo_url',
         'is_active',
         'settings',

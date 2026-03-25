@@ -1,7 +1,7 @@
 // FactoryPulse Service Worker
 // Handles offline caching, background sync, and push notifications
 
-const CACHE_NAME = 'factorypulse-v2';
+const CACHE_NAME = 'factorypulse-v3';
 const OFFLINE_URL = '/offline.html';
 
 // Static assets to cache immediately
@@ -53,6 +53,13 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
+// Allow app to trigger immediate activation for updates
+self.addEventListener('message', (event) => {
+    if (event?.data?.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
+
 // Routes that should always go to the network (bypass SW caching)
 const NETWORK_ONLY_ROUTES = ['/install', '/setup'];
 
@@ -79,6 +86,12 @@ self.addEventListener('fetch', (event) => {
     // API requests - Network first, cache fallback
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(networkFirstStrategy(request));
+        return;
+    }
+
+    // Build assets should prefer fresh network versions after deployments
+    if (url.pathname.startsWith('/build/')) {
+        event.respondWith(networkFirstStaticStrategy(request));
         return;
     }
 
@@ -137,6 +150,24 @@ async function cacheFirstStrategy(request) {
     }
 }
 
+// Network-first strategy for build/static assets to avoid stale UI after deploys
+async function networkFirstStaticStrategy(request) {
+    try {
+        const networkResponse = await fetch(request, { cache: 'no-cache' });
+        if (networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+    } catch (error) {
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+            return cachedResponse;
+        }
+        throw error;
+    }
+}
+
 // Network-first strategy for API requests
 async function networkFirstStrategy(request) {
     const url = new URL(request.url);
@@ -180,11 +211,11 @@ async function networkFirstStrategy(request) {
 self.addEventListener('sync', (event) => {
     console.log('[SW] Background sync:', event.tag);
     
-    if (event.tag === 'sync-offline-sales') {
+    if (event.tag === 'sync-offline-sales' || event.tag === 'sync-sales') {
         event.waitUntil(syncOfflineSales());
     }
     
-    if (event.tag === 'sync-offline-payments') {
+    if (event.tag === 'sync-offline-payments' || event.tag === 'sync-payments') {
         event.waitUntil(syncOfflinePayments());
     }
 });

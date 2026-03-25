@@ -36,7 +36,7 @@ class SalesOrderService extends BaseService
     public function list(array $filters = [], int $perPage = 15)
     {
         $query = SalesOrder::query()
-            ->with(['customer', 'formula', 'items.product', 'warehouse', 'creator', 'approver']);
+            ->with(['customer', 'formula', 'items.product', 'warehouse', 'creator', 'approver', 'charges']);
 
         // Search
         if (!empty($filters['search'])) {
@@ -97,7 +97,8 @@ class SalesOrderService extends BaseService
             'warehouse',
             'creator',
             'approver',
-            'payments'
+            'payments',
+            'charges',
         ])->findOrFail($id);
     }
 
@@ -132,15 +133,24 @@ class SalesOrderService extends BaseService
                 $items = $this->processDirectOrder($data);
             }
 
+            // Service charges (CRUSHING, PELLETING, etc.)
+            $serviceCharges = $data['service_charges'] ?? [];
+            $serviceSubtotal = collect($serviceCharges)->sum('amount');
+
             // Calculate totals
             $subtotal = collect($items)->sum(function ($item) {
                 return $item['quantity'] * $item['unit_price'];
             });
+            $subtotal += $serviceSubtotal;
+
+            // Delivery / sale charges (transport, loading, handling, etc.)
+            $deliveryCharges = $data['charges'] ?? [];
+            $chargesTotal = collect($deliveryCharges)->sum('charge_amount');
             
             $discountAmount = $data['discount_amount'] ?? 0;
             $taxRate = config('erp.vat_rate', 0.075);
             $taxAmount = ($subtotal - $discountAmount) * $taxRate;
-            $totalAmount = $subtotal - $discountAmount + $taxAmount;
+            $totalAmount = $subtotal - $discountAmount + $taxAmount + $chargesTotal;
 
             // Credit limit check for credit orders
             if ($paymentType === 'credit') {
@@ -177,6 +187,7 @@ class SalesOrderService extends BaseService
                 'total_amount' => $totalAmount,
                 'credit_available' => $paymentType === 'credit' ? $customer->getAvailableCredit() : null,
                 'notes' => $data['notes'] ?? null,
+                'fdo_officer' => $data['fdo_officer'] ?? null,
                 'delivery_address' => $data['delivery_address'] ?? $customer->address,
                 'created_by' => Auth::id(),
             ]);
@@ -185,6 +196,7 @@ class SalesOrderService extends BaseService
             foreach ($items as $index => $item) {
                 SalesOrderItem::create([
                     'sales_order_id' => $salesOrder->id,
+                    'item_type' => 'product',
                     'product_id' => $item['product_id'],
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['unit_price'],
@@ -193,9 +205,39 @@ class SalesOrderService extends BaseService
                 ]);
             }
 
+            // Create service charge items (CRUSHING, PELLETING, etc.)
+            $productCount = count($items);
+            foreach ($serviceCharges as $idx => $charge) {
+                SalesOrderItem::create([
+                    'sales_order_id' => $salesOrder->id,
+                    'item_type' => 'service',
+                    'service_name' => $charge['name'],
+                    'product_id' => null,
+                    'quantity' => $charge['quantity'],
+                    'unit_price' => 0,
+                    'total_amount' => $charge['amount'],
+                    'sequence' => $productCount + $idx + 1,
+                ]);
+            }
+
             // Mark formula as used if applicable
             if (!empty($data['formula_id'])) {
                 $this->formulaService->markAsUsed($data['formula_id']);
+            }
+
+            // Save delivery/sale charges (transport, loading, handling, etc.)
+            if (!empty($data['charges'])) {
+                foreach ($data['charges'] as $charge) {
+                    \App\Models\OrderCharge::create([
+                        'chargeable_type' => SalesOrder::class,
+                        'chargeable_id' => $salesOrder->id,
+                        'sale_charge_id' => $charge['sale_charge_id'] ?? null,
+                        'charge_name' => $charge['charge_name'],
+                        'charge_amount' => $charge['charge_amount'],
+                        'add_to_credit' => $charge['add_to_credit'] ?? false,
+                        'credited' => false,
+                    ]);
+                }
             }
 
             // Throw exception if approval required

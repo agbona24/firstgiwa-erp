@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Customer;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Auth;
 
 class UpdateCustomerRequest extends FormRequest
 {
@@ -21,6 +20,7 @@ class UpdateCustomerRequest extends FormRequest
             'email' => 'nullable|email|unique:customers,email,' . $customerId,
             'phone' => 'sometimes|required|string|max:20',
             'customer_type' => 'sometimes|required|in:cash,credit,both',
+            'customer_category' => 'sometimes|required|in:retail,wholesale,distributor,walk_in,other',
             'address' => 'nullable|string',
             'contact_person' => 'nullable|string|max:255',
             'credit_facility_type_id' => 'nullable|exists:credit_facility_types,id',

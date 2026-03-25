@@ -12,6 +12,7 @@ use App\Models\Category;
 use App\Models\Unit;
 use App\Models\Setting;
 use App\Models\BankAccount;
+use App\Services\IndustryTemplateSeeder;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -53,10 +54,61 @@ class SetupController extends Controller
     }
 
     /**
+     * Get the industry template registry (categories and subcategories).
+     */
+    public function getIndustryRegistry(): JsonResponse
+    {
+        return response()->json(IndustryTemplateSeeder::getRegistry());
+    }
+
+    /**
+     * Get a specific industry template preview for the frontend wizard.
+     */
+    public function getIndustryTemplate(string $key): JsonResponse
+    {
+        $preview = IndustryTemplateSeeder::getTemplatePreview($key);
+
+        if (!$preview) {
+            return response()->json(['message' => 'Template not found'], 404);
+        }
+
+        return response()->json($preview);
+    }
+
+    /**
      * Complete initial system setup
      */
     public function completeSetup(Request $request): JsonResponse
     {
+        // Guard: prevent re-running setup only when a fully configured tenant exists
+        // (both a tenant row AND at least one admin user).
+        // If orphaned tenants exist (tenant but no user, from a failed previous attempt),
+        // clean ALL of them up so the setup can proceed fresh.
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        $tenantTables = DB::select(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'tenant_id'
+             ORDER BY TABLE_NAME"
+        );
+        foreach (Tenant::all() as $existingTenant) {
+            $hasAdminUser = User::where('tenant_id', $existingTenant->id)->exists();
+            if ($hasAdminUser) {
+                DB::statement('SET FOREIGN_KEY_CHECKS=1');
+                return response()->json([
+                    'success' => false,
+                    'already_onboarded' => true,
+                    'message' => 'This system has already been configured. Please log in.',
+                ], 409);
+            }
+            // No user for this tenant — orphan from a failed setup. Clean it up.
+            Log::info('Cleaning up orphaned tenant from failed setup.', ['tenant_id' => $existingTenant->id]);
+            foreach ($tenantTables as $table) {
+                DB::table($table->TABLE_NAME)->where('tenant_id', $existingTenant->id)->delete();
+            }
+            DB::table('tenants')->where('id', $existingTenant->id)->delete();
+        }
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
         $validated = $request->validate([
             // Company Info (frontend sends 'name' not 'companyName')
             'company.name' => 'required|string|max:255',
@@ -93,6 +145,10 @@ class SetupController extends Controller
             'products.default_items' => 'nullable|array',
             'products.default_items.*' => 'string|max:150',
             
+            // Industry Selection
+            'industry_category' => 'nullable|string|max:50',
+            'industry_subcategory' => 'nullable|string|max:50',
+
             // Admin Account
             'admin.name' => 'required|string|max:255',
             'admin.email' => 'required|email|max:255|unique:users,email',
@@ -109,6 +165,8 @@ class SetupController extends Controller
                 'email' => $validated['company']['email'] ?? null,
                 'phone' => $validated['company']['phone'] ?? null,
                 'address' => $validated['company']['address'] ?? null,
+                'industry_category' => $validated['industry_category'] ?? null,
+                'industry_subcategory' => $validated['industry_subcategory'] ?? null,
                 'is_active' => true,
             ]);
 
@@ -123,91 +181,108 @@ class SetupController extends Controller
                 'is_active' => true,
             ]);
 
-            // 3. Create Warehouses
-            $warehouses = $validated['warehouses'] ?? [];
-            
+            // 3. Resolve industry template
+            $templateKey = IndustryTemplateSeeder::resolveTemplateKey(
+                $validated['industry_category'] ?? null,
+                $validated['industry_subcategory'] ?? null
+            );
+
             $defaultWarehouseId = null;
 
-            if (empty($warehouses)) {
-                // Create default warehouse
-                $warehouse = Warehouse::create([
-                    'tenant_id' => $tenant->id,
-                    'branch_id' => $mainBranch->id,
-                    'name' => 'Main Warehouse',
-                    'code' => 'WH-' . $tenant->id . '-MAIN',
-                    'address' => $validated['company']['address'] ?? null,
-                    'is_active' => true,
-                ]);
-                $defaultWarehouseId = $warehouse->id;
+            if ($templateKey) {
+                // Use industry template seeder — creates categories, units,
+                // products (with prices), warehouses, departments
+                $seeder = new IndustryTemplateSeeder();
+                $seedResult = $seeder->seed($tenant->id, $mainBranch->id, $templateKey);
+
+                // Get the first warehouse ID for settings
+                $firstWarehouse = Warehouse::where('tenant_id', $tenant->id)->first();
+                $defaultWarehouseId = $firstWarehouse?->id;
             } else {
-                foreach ($warehouses as $idx => $wh) {
+                // No template — use wizard data (existing behavior)
+
+                // Create Warehouses
+                $warehouses = $validated['warehouses'] ?? [];
+
+                if (empty($warehouses)) {
                     $warehouse = Warehouse::create([
                         'tenant_id' => $tenant->id,
                         'branch_id' => $mainBranch->id,
-                        'name' => $wh['name'],
-                        'code' => 'WH-' . $tenant->id . '-' . str_pad($idx + 1, 3, '0', STR_PAD_LEFT),
-                        'address' => $wh['address'] ?? null,
-                        'location' => $wh['type'] ?? null, // Store type as location
+                        'name' => 'Main Warehouse',
+                        'code' => 'WH-' . $tenant->id . '-MAIN',
+                        'address' => $validated['company']['address'] ?? null,
                         'is_active' => true,
                     ]);
+                    $defaultWarehouseId = $warehouse->id;
+                } else {
+                    foreach ($warehouses as $idx => $wh) {
+                        $warehouse = Warehouse::create([
+                            'tenant_id' => $tenant->id,
+                            'branch_id' => $mainBranch->id,
+                            'name' => $wh['name'],
+                            'code' => 'WH-' . $tenant->id . '-' . str_pad($idx + 1, 3, '0', STR_PAD_LEFT),
+                            'address' => $wh['address'] ?? null,
+                            'location' => $wh['type'] ?? null,
+                            'is_active' => true,
+                        ]);
 
-                    if ($idx === 0) {
-                        $defaultWarehouseId = $warehouse->id;
+                        if ($idx === 0) {
+                            $defaultWarehouseId = $warehouse->id;
+                        }
                     }
                 }
-            }
 
-            // 4. Create Departments (frontend sends objects with name/code)
-            $departments = $validated['departments'] ?? [['name' => 'Management'], ['name' => 'Operations'], ['name' => 'Finance']];
-            foreach ($departments as $dept) {
-                $deptName = is_array($dept) ? ($dept['name'] ?? '') : $dept;
-                if (trim($deptName)) {
-                    Department::create([
+                // Create Departments
+                $departments = $validated['departments'] ?? [['name' => 'Management'], ['name' => 'Operations'], ['name' => 'Finance']];
+                foreach ($departments as $dept) {
+                    $deptName = is_array($dept) ? ($dept['name'] ?? '') : $dept;
+                    if (trim($deptName)) {
+                        Department::create([
+                            'tenant_id' => $tenant->id,
+                            'name' => $deptName,
+                            'is_active' => true,
+                        ]);
+                    }
+                }
+
+                // Create Categories
+                $categories = $validated['products']['categories'] ?? ['General'];
+                foreach ($categories as $idx => $catName) {
+                    if (trim($catName)) {
+                        $code = strtoupper(preg_replace('/[^A-Za-z]/', '', $catName));
+                        $code = substr($code, 0, 6) . '-' . $tenant->id . '-' . ($idx + 1);
+
+                        Category::create([
+                            'tenant_id' => $tenant->id,
+                            'name' => $catName,
+                            'code' => $code,
+                            'description' => null,
+                            'is_active' => true,
+                        ]);
+                    }
+                }
+
+                // Create Units
+                $units = $validated['products']['units'] ?? [
+                    ['name' => 'Kilogram', 'abbreviation' => 'kg'],
+                    ['name' => 'Piece', 'abbreviation' => 'pcs'],
+                ];
+                foreach ($units as $unit) {
+                    Unit::create([
                         'tenant_id' => $tenant->id,
-                        'name' => $deptName,
-                        'is_active' => true,
+                        'name' => $unit['name'],
+                        'abbreviation' => $unit['abbreviation'] ?? strtolower(substr($unit['name'], 0, 3)),
+                        'is_base_unit' => false,
                     ]);
                 }
-            }
 
-            // 5. Create Categories (frontend sends under products.categories)
-            $categories = $validated['products']['categories'] ?? ['General'];
-            foreach ($categories as $idx => $catName) {
-                if (trim($catName)) {
-                    // Generate code from name
-                    $code = strtoupper(preg_replace('/[^A-Za-z]/', '', $catName));
-                    $code = substr($code, 0, 6) . '-' . $tenant->id . '-' . ($idx + 1);
-                    
-                    Category::create([
-                        'tenant_id' => $tenant->id,
-                        'name' => $catName,
-                        'code' => $code,
-                        'description' => null,
-                        'is_active' => true,
-                    ]);
-                }
+                // Seed default products
+                $this->seedDefaultProducts(
+                    $tenant->id,
+                    $defaultWarehouseId,
+                    $validated['products']['default_items'] ?? null
+                );
             }
-
-            // 6. Create Units (frontend sends under products.units)
-            $units = $validated['products']['units'] ?? [
-                ['name' => 'Kilogram', 'abbreviation' => 'kg'],
-                ['name' => 'Piece', 'abbreviation' => 'pcs'],
-            ];
-            foreach ($units as $unit) {
-                Unit::create([
-                    'tenant_id' => $tenant->id,
-                    'name' => $unit['name'],
-                    'abbreviation' => $unit['abbreviation'] ?? strtolower(substr($unit['name'], 0, 3)),
-                    'is_base_unit' => false,
-                ]);
-            }
-
-            // 7. Seed default products for quick onboarding
-            $this->seedDefaultProducts(
-                $tenant->id,
-                $defaultWarehouseId,
-                $validated['products']['default_items'] ?? null
-            );
 
             // 8. Create Admin User
             $admin = User::create([
@@ -432,6 +507,89 @@ class SetupController extends Controller
                     ]);
                 }
             }
+        }
+    }
+
+    /**
+     * Reset the system to factory default (wipe tenant data, return to setup).
+     * Requires authentication and Super Admin role.
+     */
+    public function resetSetup(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        if (!$user->hasRole('Super Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only a Super Admin can reset the application.',
+            ], 403);
+        }
+
+        $allTenants = Tenant::all();
+
+        if ($allTenants->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tenant found. Already in factory state.',
+            ], 404);
+        }
+
+        try {
+            // Collect ALL user IDs across ALL tenants for token cleanup
+            $allTenantIds = $allTenants->pluck('id')->toArray();
+            $userIds = DB::table('users')->whereIn('tenant_id', $allTenantIds)->pluck('id')->toArray();
+
+            // Revoke all personal access tokens for all tenant users
+            if (!empty($userIds)) {
+                DB::table('personal_access_tokens')
+                    ->where('tokenable_type', 'App\\Models\\User')
+                    ->whereIn('tokenable_id', $userIds)
+                    ->delete();
+            }
+
+            // Dynamically discover all tables with a tenant_id column and
+            // delete ALL tenant rows from each, then truncate tenants table.
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+            $tables = DB::select(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'tenant_id'
+                 ORDER BY TABLE_NAME"
+            );
+
+            foreach ($tables as $table) {
+                DB::table($table->TABLE_NAME)->whereIn('tenant_id', $allTenantIds)->delete();
+            }
+
+            // Delete all tenants
+            DB::table('tenants')->whereIn('id', $allTenantIds)->delete();
+
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+            Log::info('System reset to factory default.', [
+                'reset_by_user' => $user->email,
+                'tenants_removed' => $allTenantIds,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'System has been reset to factory default. Please complete setup again.',
+            ]);
+
+        } catch (\Exception $e) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            Log::error('System reset failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Reset failed: ' . $e->getMessage(),
+            ], 500);
         }
     }
 }

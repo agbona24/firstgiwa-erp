@@ -115,6 +115,15 @@ export const templatesAPI = {
     update: (templates) => api.put('/settings/templates', { templates }),
 };
 
+// Sale Charges (Transport, Loading, Handling, etc.)
+export const saleChargesAPI = {
+    list: (params) => api.get('/settings/sale-charges', { params }),
+    create: (data) => api.post('/settings/sale-charges', data),
+    update: (id, data) => api.put(`/settings/sale-charges/${id}`, data),
+    delete: (id) => api.delete(`/settings/sale-charges/${id}`),
+    toggleActive: (id) => api.post(`/settings/sale-charges/${id}/toggle-active`),
+};
+
 // Credit Facility Settings
 export const creditSettingsAPI = {
     get: () => api.get('/settings/credit'),
@@ -175,6 +184,7 @@ export default {
     print: printSettingsAPI,
     templates: templatesAPI,
     credit: creditSettingsAPI,
+    saleCharges: saleChargesAPI,
     creditFacilityTypes: creditFacilityTypesAPI,
     backup: backupAPI,
     api: apiSettingsAPI,

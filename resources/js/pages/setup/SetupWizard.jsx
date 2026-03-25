@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import { Card, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
-import { completeSetup } from '../../services/setupAPI';
+import { completeSetup, getIndustryRegistry, getIndustryTemplate, checkSetupStatus } from '../../services/setupAPI';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../hooks/useAuth';
 import { setAuthToken } from '../../services/api';
@@ -11,6 +11,7 @@ import { setAuthToken } from '../../services/api';
 const fmt = (n) => '\u20a6' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 2 });
 
 const STEP_LABELS = [
+    'Industry Type',
     'Company Profile',
     'Business Configuration',
     'Warehouses & Locations',
@@ -19,6 +20,8 @@ const STEP_LABELS = [
     'Default Products',
     'Admin Account',
 ];
+
+const TOTAL_STEPS = STEP_LABELS.length;
 
 const DEFAULT_DEPARTMENTS = [
     'Management',
@@ -94,6 +97,31 @@ const MONTHS = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+// Industry icon components
+const INDUSTRY_ICONS = {
+    leaf: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21c-4-4-8-7.5-8-12a8 8 0 0116 0c0 4.5-4 8-8 12z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 13V7m-3 3l3-3 3 3" />
+        </svg>
+    ),
+    factory: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+        </svg>
+    ),
+    store: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z" />
+        </svg>
+    ),
+    briefcase: (
+        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+        </svg>
+    ),
+};
+
 function generateCode(name) {
     return name
         .replace(/&/g, '')
@@ -105,6 +133,8 @@ function generateCode(name) {
 
 const inputClass =
     'w-full px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
+const inlineInputClass =
+    'px-4 py-2.5 border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 function CheckIcon() {
@@ -135,6 +165,186 @@ function PlusIcon() {
 // Individual Step Components
 // ---------------------------------------------------------------------------
 
+function StepIndustryType({ data, onChange, onTemplateLoaded }) {
+    const [registry, setRegistry] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [loadingTemplate, setLoadingTemplate] = useState(false);
+
+    useEffect(() => {
+        getIndustryRegistry()
+            .then((res) => setRegistry(res))
+            .catch(() => setRegistry({}))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const selectCategory = (key) => {
+        onChange({ ...data, category: key, subcategory: '', templateKey: '' });
+    };
+
+    const selectSubcategory = async (key, templateKey) => {
+        onChange({ ...data, subcategory: key, templateKey: templateKey || '' });
+
+        if (templateKey) {
+            setLoadingTemplate(true);
+            try {
+                const preview = await getIndustryTemplate(templateKey);
+                onTemplateLoaded(preview);
+            } catch {
+                // Failed to load template — keep generic defaults
+            } finally {
+                setLoadingTemplate(false);
+            }
+        }
+    };
+
+    const skipIndustry = () => {
+        onChange({ category: '', subcategory: '', templateKey: '' });
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-20">
+                <svg className="animate-spin w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+            </div>
+        );
+    }
+
+    const selectedCat = registry[data.category];
+
+    return (
+        <div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">What industry are you in?</h2>
+            <p className="text-slate-500 mb-8">
+                Select your industry to get pre-configured categories, products, and settings tailored to your business.
+                You can customize everything in the next steps.
+            </p>
+
+            {/* Category Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {Object.entries(registry).map(([key, cat]) => {
+                    const isSelected = data.category === key;
+                    return (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => selectCategory(key)}
+                            className={
+                                'flex items-start gap-4 p-5 rounded-xl border-2 text-left transition-all ' +
+                                (isSelected
+                                    ? 'border-blue-600 bg-blue-50 shadow-md'
+                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm')
+                            }
+                        >
+                            <div className={isSelected ? 'text-blue-600' : 'text-slate-400'}>
+                                {INDUSTRY_ICONS[cat.icon] || INDUSTRY_ICONS.briefcase}
+                            </div>
+                            <div>
+                                <h3 className={'text-base font-semibold ' + (isSelected ? 'text-blue-700' : 'text-slate-700')}>
+                                    {cat.label}
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-0.5">{cat.description}</p>
+                            </div>
+                            {isSelected && (
+                                <div className="ml-auto mt-1">
+                                    <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center">
+                                        <CheckIcon />
+                                    </div>
+                                </div>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Sub-category Cards (shown when category selected) */}
+            {selectedCat && (
+                <div className="mt-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4">Select your specific business type</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {Object.entries(selectedCat.subcategories).map(([key, sub]) => {
+                            const isSelected = data.subcategory === key;
+                            const hasTemplate = !!sub.template;
+
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => hasTemplate && selectSubcategory(key, sub.template)}
+                                    disabled={!hasTemplate || loadingTemplate}
+                                    className={
+                                        'relative p-4 rounded-lg border-2 text-left transition-all ' +
+                                        (isSelected
+                                            ? 'border-blue-600 bg-blue-50'
+                                            : hasTemplate
+                                              ? 'border-slate-200 bg-white hover:border-blue-300 cursor-pointer'
+                                              : 'border-slate-100 bg-slate-50 cursor-not-allowed opacity-60')
+                                    }
+                                >
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h4 className={'text-sm font-semibold ' + (isSelected ? 'text-blue-700' : 'text-slate-700')}>
+                                            {sub.label}
+                                        </h4>
+                                        {!hasTemplate && (
+                                            <span className="text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                                Coming Soon
+                                            </span>
+                                        )}
+                                        {isSelected && (
+                                            <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
+                                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-500">{sub.description}</p>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Loading template indicator */}
+            {loadingTemplate && (
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                    <svg className="animate-spin w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span className="text-sm text-blue-700 font-medium">Loading industry template...</span>
+                </div>
+            )}
+
+            {/* Template loaded confirmation */}
+            {data.templateKey && !loadingTemplate && (
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                    <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm text-green-700 font-medium">
+                        Template loaded! Categories, products, and settings have been pre-configured. You can customize them in the next steps.
+                    </span>
+                </div>
+            )}
+
+            {/* Skip option */}
+            <div className="mt-8 text-center">
+                <button
+                    type="button"
+                    onClick={skipIndustry}
+                    className="text-sm text-slate-500 hover:text-slate-700 underline underline-offset-2"
+                >
+                    Skip — I'll set up manually
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function StepCompanyProfile({ data, onChange }) {
     const update = (field, value) => onChange({ ...data, [field]: value });
 
@@ -142,7 +352,7 @@ function StepCompanyProfile({ data, onChange }) {
         <div>
             <h2 className="text-2xl font-bold text-slate-800 mb-1">Welcome to FactoryPulse</h2>
             <p className="text-slate-500 mb-8">
-                Let's get your agro-processing business set up. This wizard will walk you through the
+                Let's get your business set up. This wizard will walk you through the
                 essential configuration. You can always adjust settings later.
             </p>
 
@@ -517,14 +727,14 @@ function StepProductsUnits({ categories, units, onChangeCategories, onChangeUnit
                             <div key={idx} className="flex items-center gap-2">
                                 <input
                                     type="text"
-                                    className={inputClass + ' flex-1'}
+                                    className={`${inlineInputClass} flex-1`}
                                     placeholder="Unit name"
                                     value={unit.name}
                                     onChange={(e) => updateUnit(idx, 'name', e.target.value)}
                                 />
                                 <input
                                     type="text"
-                                    className={inputClass + ' w-32'}
+                                    className={`${inlineInputClass} w-32`}
                                     placeholder="Abbr."
                                     value={unit.abbreviation}
                                     onChange={(e) => updateUnit(idx, 'abbreviation', e.target.value)}
@@ -667,7 +877,8 @@ function StepDefaultProducts({ items, onChange }) {
         <div>
             <h2 className="text-2xl font-bold text-slate-800 mb-1">Default Products</h2>
             <p className="text-slate-500 mb-8">
-                These default raw material items will be auto-added on setup completion.
+                These default items will be auto-added on setup completion.
+                {' '}Products from your selected industry template include full pricing data.
             </p>
 
             <Card>
@@ -729,9 +940,19 @@ function StepDefaultProducts({ items, onChange }) {
 }
 
 function StepReview({ wizardData }) {
-    const { company, business, warehouses, departments, categories, units, admin, defaultProducts } = wizardData;
+    const { industry, company, business, warehouses, departments, categories, units, admin, defaultProducts } = wizardData;
+
+    const industryLabel = industry.category && industry.subcategory
+        ? `${industry.category} / ${industry.subcategory}`
+        : 'None (manual setup)';
 
     const summaryCards = [
+        {
+            title: 'Industry',
+            items: [
+                { label: 'Template', value: industry.templateKey || 'Manual' },
+            ],
+        },
         {
             title: 'Company',
             items: [
@@ -806,19 +1027,21 @@ function StepReview({ wizardData }) {
             <Card className="mb-8">
                 <CardBody>
                     <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
-                        Default Raw Material Items (Auto-added on setup completion)
+                        Default Items (Auto-added on setup completion)
                     </h4>
                     <div className="max-h-52 overflow-y-auto pr-2">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {DEFAULT_SETUP_PRODUCTS.map((item) => (
-                                <div key={item} className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+                            {(defaultProducts || []).filter(Boolean).map((item, idx) => (
+                                <div key={idx} className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
                                     {item}
                                 </div>
                             ))}
                         </div>
                     </div>
                     <p className="text-xs text-slate-400 mt-3">
-                        If you don’t need them later, use Inventory → Delete All.
+                        {wizardData.industry.templateKey
+                            ? 'Products from your industry template will include full pricing and category data.'
+                            : 'If you don\'t need them later, use Inventory to remove them.'}
                     </p>
                 </CardBody>
             </Card>
@@ -847,8 +1070,29 @@ export default function SetupWizard() {
     const [currentStep, setCurrentStep] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState(null);
+    const [alreadyOnboarded, setAlreadyOnboarded] = useState(false);
+    const [checkingStatus, setCheckingStatus] = useState(true);
+
+    // On mount, verify the system is not already configured
+    useEffect(() => {
+        checkSetupStatus()
+            .then((data) => {
+                if (data.setup_complete) {
+                    setAlreadyOnboarded(true);
+                }
+            })
+            .catch(() => {
+                // If the status check fails, allow the wizard to proceed
+            })
+            .finally(() => setCheckingStatus(false));
+    }, []);
 
     const [wizardData, setWizardData] = useState({
+        industry: {
+            category: '',
+            subcategory: '',
+            templateKey: '',
+        },
         company: {
             companyName: '',
             rcNumber: '',
@@ -882,11 +1126,34 @@ export default function SetupWizard() {
         setWizardData((prev) => ({ ...prev, [section]: value }));
     }, []);
 
+    // When a template is loaded, update the wizard defaults
+    const handleTemplateLoaded = useCallback((preview) => {
+        setWizardData((prev) => ({
+            ...prev,
+            categories: preview.categories || prev.categories,
+            units: preview.units || prev.units,
+            defaultProducts: preview.products || prev.defaultProducts,
+            departments: (preview.departments || []).map((d) => ({
+                name: d.name,
+                code: d.code || generateCode(d.name),
+            })),
+            warehouses: (preview.warehouses || []).map((w) => ({
+                name: w.name,
+                address: '',
+                type: w.type === 'raw_material' ? 'Warehouse' : w.type === 'finished_good' ? 'Warehouse' : 'Warehouse',
+            })),
+        }));
+    }, []);
+
+    const lastStep = TOTAL_STEPS - 1;
+
     const canProceed = () => {
         switch (currentStep) {
-            case 0:
+            case 0: // Industry Type — always can proceed (optional)
+                return true;
+            case 1: // Company Profile
                 return wizardData.company.companyName.trim() !== '';
-            case 6: {
+            case 7: { // Admin Account
                 const a = wizardData.admin;
                 return (
                     a.fullName.trim() !== '' &&
@@ -901,7 +1168,7 @@ export default function SetupWizard() {
     };
 
     const handleNext = () => {
-        if (currentStep < 6) setCurrentStep((s) => s + 1);
+        if (currentStep < lastStep) setCurrentStep((s) => s + 1);
     };
 
     const handleBack = () => {
@@ -931,10 +1198,12 @@ export default function SetupWizard() {
                     number_format: wizardData.business.numberFormat,
                     approval_threshold: parseFloat(wizardData.business.approvalThreshold) || 50000,
                 },
+                industry_category: wizardData.industry.category || null,
+                industry_subcategory: wizardData.industry.subcategory || null,
                 warehouses: wizardData.warehouses.filter(w => w.name && w.name.trim() !== ''),
                 departments: wizardData.departments.filter(d => d.name && d.name.trim() !== ''),
                 products: {
-                    categories: wizardData.categories.filter(c => c && c.trim() !== ''),
+                    categories: wizardData.categories.filter(c => c && (typeof c === 'string' ? c.trim() !== '' : true)),
                     units: wizardData.units.filter(u => u.name && u.name.trim() !== ''),
                     default_items: wizardData.defaultProducts.filter(p => p && p.trim() !== ''),
                 },
@@ -967,7 +1236,7 @@ export default function SetupWizard() {
 
                 // Navigate to dashboard and start the onboarding tour
                 navigate('/dashboard');
-                
+
                 // Start the tour after a short delay to let dashboard render
                 setTimeout(() => {
                     startTour();
@@ -976,13 +1245,13 @@ export default function SetupWizard() {
         } catch (error) {
             console.error('Setup failed:', error);
             let errorMessage = 'Setup failed. Please try again.';
-            
+
             if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
             } else if (error.response?.data?.errors) {
                 errorMessage = Object.values(error.response.data.errors).flat().join(', ');
             }
-            
+
             setSubmitError(errorMessage);
         } finally {
             setIsSubmitting(false);
@@ -992,14 +1261,22 @@ export default function SetupWizard() {
     const renderStep = () => {
         switch (currentStep) {
             case 0:
-                return <StepCompanyProfile data={wizardData.company} onChange={(v) => updateField('company', v)} />;
+                return (
+                    <StepIndustryType
+                        data={wizardData.industry}
+                        onChange={(v) => updateField('industry', v)}
+                        onTemplateLoaded={handleTemplateLoaded}
+                    />
+                );
             case 1:
-                return <StepBusinessConfig data={wizardData.business} onChange={(v) => updateField('business', v)} />;
+                return <StepCompanyProfile data={wizardData.company} onChange={(v) => updateField('company', v)} />;
             case 2:
-                return <StepWarehouses data={wizardData.warehouses} onChange={(v) => updateField('warehouses', v)} />;
+                return <StepBusinessConfig data={wizardData.business} onChange={(v) => updateField('business', v)} />;
             case 3:
-                return <StepDepartments data={wizardData.departments} onChange={(v) => updateField('departments', v)} />;
+                return <StepWarehouses data={wizardData.warehouses} onChange={(v) => updateField('warehouses', v)} />;
             case 4:
+                return <StepDepartments data={wizardData.departments} onChange={(v) => updateField('departments', v)} />;
+            case 5:
                 return (
                     <StepProductsUnits
                         categories={wizardData.categories}
@@ -1008,15 +1285,60 @@ export default function SetupWizard() {
                         onChangeUnits={(v) => updateField('units', v)}
                     />
                 );
-            case 5:
-                return <StepDefaultProducts items={wizardData.defaultProducts} onChange={(v) => updateField('defaultProducts', v)} />;
             case 6:
+                return <StepDefaultProducts items={wizardData.defaultProducts} onChange={(v) => updateField('defaultProducts', v)} />;
+            case 7:
                 return <StepAdminAccount data={wizardData.admin} onChange={(v) => updateField('admin', v)} />;
             default:
                 return null;
         }
     };
 
+    // Review is shown after Admin Account step via the launch button
+
+    // ---- Pre-render guards -------------------------------------------------
+
+    if (checkingStatus) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-slate-50">
+                <div className="text-center">
+                    <svg className="animate-spin w-10 h-10 mx-auto text-blue-600 mb-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <p className="text-slate-500 text-sm">Checking system status...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (alreadyOnboarded) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-slate-50">
+                <div className="max-w-md w-full mx-4 text-center">
+                    <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
+                        <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-slate-800 mb-2">System Already Configured</h1>
+                    <p className="text-slate-500 mb-8">
+                        This system has already been set up. Setup can only be run once on a new installation.
+                        Please log in with your administrator credentials.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/login')}
+                        className="inline-flex items-center px-6 py-3 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+                    >
+                        Go to Login
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // ---- Main wizard layout ------------------------------------------------
     return (
         <div className="flex h-screen bg-slate-50">
             {/* Sidebar */}
@@ -1098,7 +1420,7 @@ export default function SetupWizard() {
                 {/* Sidebar footer */}
                 <div className="px-6 py-4 border-t border-slate-100">
                     <p className="text-xs text-slate-400 text-center">
-                        Step {currentStep + 1} of 7
+                        Step {currentStep + 1} of {TOTAL_STEPS}
                     </p>
                 </div>
             </aside>
@@ -1109,7 +1431,7 @@ export default function SetupWizard() {
                 <header className="shrink-0 px-8 py-4 bg-white border-b border-slate-200 flex items-center justify-between">
                     <div>
                         <p className="text-sm text-slate-500">
-                            Step {currentStep + 1} of 7
+                            Step {currentStep + 1} of {TOTAL_STEPS}
                         </p>
                         <h2 className="text-lg font-semibold text-slate-800">
                             {STEP_LABELS[currentStep]}
@@ -1121,11 +1443,11 @@ export default function SetupWizard() {
                         <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-blue-600 rounded-full transition-all duration-500 ease-out"
-                                style={{ width: `${((currentStep + 1) / 7) * 100}%` }}
+                                style={{ width: `${((currentStep + 1) / TOTAL_STEPS) * 100}%` }}
                             />
                         </div>
                         <p className="text-xs text-slate-400 text-right mt-1">
-                            {Math.round(((currentStep + 1) / 7) * 100)}% complete
+                            {Math.round(((currentStep + 1) / TOTAL_STEPS) * 100)}% complete
                         </p>
                     </div>
                 </header>
@@ -1153,7 +1475,7 @@ export default function SetupWizard() {
                     </div>
 
                     <div>
-                        {currentStep < 6 ? (
+                        {currentStep < lastStep ? (
                             <button
                                 type="button"
                                 onClick={handleNext}

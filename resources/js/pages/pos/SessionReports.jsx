@@ -564,7 +564,7 @@ export default function SessionReports() {
                                                 <tr key={tx.id}>
                                                     <td className="px-3 py-2 font-mono text-slate-900 dark:text-white">{tx.order_number}</td>
                                                     <td className="px-3 py-2 text-slate-500">{new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{tx.customer?.name || 'Walk-in'}</td>
+                                                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{tx.customer?.name || 'Cash Booking'}</td>
                                                     <td className="px-3 py-2 text-right font-medium text-green-600">{formatCurrency(tx.total_amount)}</td>
                                                 </tr>
                                             ))}

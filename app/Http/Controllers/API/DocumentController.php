@@ -30,13 +30,14 @@ class DocumentController extends Controller
      */
     public function invoice(SalesOrder $salesOrder)
     {
-        $salesOrder->load(['customer', 'items.product', 'formula']);
-        
+        $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges']);
+
         $data = $this->getCommonData('Invoice');
         $data['salesOrder'] = $salesOrder;
-        
+        $data['previousBalance'] = $this->getCustomerPreviousBalance($salesOrder);
+
         $pdf = Pdf::loadView('pdf.invoice', $data);
-        
+
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
         return $pdf->download("Invoice-{$orderNumber}.pdf");
     }
@@ -46,13 +47,14 @@ class DocumentController extends Controller
      */
     public function invoicePreview(SalesOrder $salesOrder)
     {
-        $salesOrder->load(['customer', 'items.product', 'formula']);
-        
+        $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges']);
+
         $data = $this->getCommonData('Invoice');
         $data['salesOrder'] = $salesOrder;
-        
+        $data['previousBalance'] = $this->getCustomerPreviousBalance($salesOrder);
+
         $pdf = Pdf::loadView('pdf.invoice', $data);
-        
+
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
         return $pdf->stream("Invoice-{$orderNumber}.pdf");
     }
@@ -299,6 +301,23 @@ class DocumentController extends Controller
             'logoBase64' => $logoBase64,
             'template' => $template,
         ];
+    }
+
+    /**
+     * Get customer's previous outstanding balance (before this order)
+     */
+    protected function getCustomerPreviousBalance(\App\Models\SalesOrder $salesOrder): float
+    {
+        $customer = $salesOrder->customer;
+        if (!$customer) return 0;
+
+        // Sum of all unpaid/partially-paid sales orders EXCEPT this one
+        return (float) \App\Models\SalesOrder::where('customer_id', $customer->id)
+            ->where('id', '!=', $salesOrder->id)
+            ->whereIn('status', ['approved', 'processing', 'shipped', 'delivered', 'completed'])
+            ->whereColumn('total_amount', '>', \DB::raw('COALESCE(amount_paid, 0)'))
+            ->selectRaw('SUM(total_amount - COALESCE(amount_paid, 0))')
+            ->value(0);
     }
 
     /**

@@ -6,7 +6,7 @@ import Badge from '../../components/ui/Badge';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import posAPI from '../../services/posAPI';
-import { taxesAPI, bankAccountsAPI } from '../../services/settingsAPI';
+import { taxesAPI, bankAccountsAPI, saleChargesAPI } from '../../services/settingsAPI';
 import OpenRegisterModal from './OpenRegisterModal';
 import CloseRegisterModal from './CloseRegisterModal';
 
@@ -43,6 +43,9 @@ export default function POSTerminal() {
     const [selectedTaxId, setSelectedTaxId] = useState('');
     const [bankAccounts, setBankAccounts] = useState([]);
     const [selectedBankId, setSelectedBankId] = useState('');
+    const [availableCharges, setAvailableCharges] = useState([]);
+    // selectedCharges: array of { id, name, amount (editable), add_to_credit }
+    const [selectedCharges, setSelectedCharges] = useState([]);
     const [loading, setLoading] = useState(true);
     const [processingPayment, setProcessingPayment] = useState(false);
     
@@ -105,13 +108,14 @@ export default function POSTerminal() {
     const fetchInitialData = async () => {
         try {
             setLoading(true);
-            const [productsRes, customersRes, categoriesRes, ticketsRes, taxesRes, bankAccountsRes] = await Promise.all([
+            const [productsRes, customersRes, categoriesRes, ticketsRes, taxesRes, bankAccountsRes, chargesRes] = await Promise.all([
                 posAPI.getProducts(),
                 posAPI.getCustomers(),
                 posAPI.getCategories(),
                 posAPI.getTickets(),
                 taxesAPI.list(),
-                bankAccountsAPI.list()
+                bankAccountsAPI.list(),
+                saleChargesAPI.list({ context: 'pos', active_only: true })
             ]);
             
             setProducts(productsRes.data || []);
@@ -130,7 +134,11 @@ export default function POSTerminal() {
             const bankData = bankAccountsRes.data?.data?.bank_accounts || bankAccountsRes.data?.bank_accounts || bankAccountsRes.data?.data || bankAccountsRes.data || [];
             setBankAccounts(Array.isArray(bankData) ? bankData : []);
             
-            // Set default walk-in customer
+            // Load available delivery/sale charges for POS
+            const chargeData = chargesRes.data?.data?.charges || [];
+            setAvailableCharges(Array.isArray(chargeData) ? chargeData : []);
+
+            // Set default cash booking customer
             const walkIn = customersRes.data?.find(c => c.customer_type === 'walk-in');
             if (walkIn) setSelectedCustomer(walkIn);
         } catch (error) {
@@ -193,7 +201,8 @@ export default function POSTerminal() {
     const discountAmount = subtotal * (discount / 100);
     const taxRate = getTaxRate();
     const tax = (subtotal - discountAmount) * taxRate;
-    const total = subtotal - discountAmount + tax;
+    const chargesTotal = selectedCharges.reduce((sum, c) => sum + (parseFloat(c.amount) || 0), 0);
+    const total = subtotal - discountAmount + tax + chargesTotal;
 
     // Filter products (client-side filtering for quick response)
     const filteredProducts = products.filter(product => {
@@ -386,7 +395,7 @@ export default function POSTerminal() {
             const availableCredit = creditLimit - outstanding;
             
             if (selectedCustomer?.customer_type === 'walk-in') {
-                toast.error('Credit payment not available for walk-in customers');
+                toast.error('Credit payment not available for cash booking customers');
                 return;
             }
             if (creditLimit <= 0) {
@@ -437,7 +446,13 @@ export default function POSTerminal() {
                 tax_rate: taxRate,
                 tax_name: selectedTax ? `${selectedTax.name} (${taxRate * 100}%)` : null,
                 bank_account_id: paymentMethod === 'transfer' ? selectedBankId : null,
-                bank_account_name: paymentMethod === 'transfer' && selectedBank ? `${selectedBank.bank_name} - ${selectedBank.account_number}` : null
+                bank_account_name: paymentMethod === 'transfer' && selectedBank ? `${selectedBank.bank_name} - ${selectedBank.account_number}` : null,
+                charges: selectedCharges.map(c => ({
+                    sale_charge_id: c.id,
+                    charge_name: c.name,
+                    charge_amount: parseFloat(c.amount) || 0,
+                    add_to_credit: !!c.add_to_credit,
+                })),
             });
 
             if (response.success) {
@@ -450,6 +465,7 @@ export default function POSTerminal() {
                 setCart([]);
                 setDiscount(0);
                 setAmountReceived('');
+                setSelectedCharges([]);
                 setShowPaymentModal(false);
                 setShowReceiptModal(true);
                 toast.success('Sale completed successfully!');
@@ -473,7 +489,7 @@ export default function POSTerminal() {
             return;
         }
         if (!selectedCustomer || !selectedCustomer.id) {
-            toast.error('Please select a customer (not walk-in) to save ticket');
+            toast.error('Please select a customer (not cash booking) to save ticket');
             return;
         }
 
@@ -591,7 +607,7 @@ export default function POSTerminal() {
         
         // Date & Customer
         receipt += `Date: ${lastReceipt.date}\n`;
-        receipt += `Customer: ${lastReceipt.customer?.name || 'Walk-in'}\n`;
+        receipt += `Customer: ${lastReceipt.customer?.name || 'Cash Booking'}\n`;
         if (lastReceipt.customer?.phone) {
             receipt += `Phone: ${lastReceipt.customer.phone}\n`;
         }
@@ -618,6 +634,11 @@ export default function POSTerminal() {
             const taxLabel = lastReceipt.taxName || 'Tax';
             receipt += leftRight(taxLabel + ':', formatCurrency(lastReceipt.tax)) + '\n';
         }
+        
+        (lastReceipt.charges || []).forEach(c => {
+            const label = c.name.length > 20 ? c.name.substring(0, 20) + '..' : c.name;
+            receipt += leftRight(label + ':', formatCurrency(c.amount)) + '\n';
+        });
         
         receipt += line('=') + '\n';
         receipt += leftRight('TOTAL:', formatCurrency(lastReceipt.total)) + '\n';
@@ -718,7 +739,7 @@ export default function POSTerminal() {
         
         // Date & Customer
         ticket += `Date: ${lastTicket.date}\n`;
-        ticket += `Customer: ${lastTicket.customer?.name || 'Walk-in'}\n`;
+        ticket += `Customer: ${lastTicket.customer?.name || 'Cash Booking'}\n`;
         if (lastTicket.customer?.phone) {
             ticket += `Phone: ${lastTicket.customer.phone}\n`;
         }
@@ -954,7 +975,7 @@ export default function POSTerminal() {
                                                     {customer.phone && <div className="text-sm text-slate-500">{customer.phone}</div>}
                                                 </div>
                                                 {customer.customer_type === 'walk-in' && (
-                                                    <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">Default</span>
+                                                    <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">Cash Booking</span>
                                                 )}
                                             </button>
                                         ))}
@@ -1135,6 +1156,67 @@ export default function POSTerminal() {
                                 </div>
                             )}
 
+                            {/* Delivery / Sale Charges */}
+                            {availableCharges.length > 0 && (
+                                <div className="border border-slate-200 rounded-lg p-3 mb-2">
+                                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Delivery Charges</div>
+                                    <div className="space-y-2">
+                                        {availableCharges.map(charge => {
+                                            const selected = selectedCharges.find(c => c.id === charge.id);
+                                            const defaultAmt = charge.amount_type === 'percentage'
+                                                ? ((subtotal - discountAmount) * parseFloat(charge.default_amount)) / 100
+                                                : parseFloat(charge.default_amount);
+                                            return (
+                                                <div key={charge.id} className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        id={`charge-${charge.id}`}
+                                                        checked={!!selected}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setSelectedCharges(prev => [...prev, {
+                                                                    id: charge.id,
+                                                                    name: charge.name,
+                                                                    amount: defaultAmt,
+                                                                    add_to_credit: !!charge.add_to_credit,
+                                                                    allow_override: charge.allow_override !== false,
+                                                                }]);
+                                                            } else {
+                                                                setSelectedCharges(prev => prev.filter(c => c.id !== charge.id));
+                                                            }
+                                                        }}
+                                                        className="w-4 h-4 text-orange-600 border-slate-300 rounded flex-shrink-0"
+                                                    />
+                                                    <label htmlFor={`charge-${charge.id}`} className="text-sm text-slate-700 flex-1 cursor-pointer">
+                                                        {charge.name}
+                                                        {charge.add_to_credit && <span className="ml-1 text-xs text-blue-600">(adds to credit)</span>}
+                                                    </label>
+                                                    {selected && (
+                                                        charge.allow_override !== false ? (
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                value={selected.amount}
+                                                                onChange={(e) => setSelectedCharges(prev => prev.map(c => c.id === charge.id ? { ...c, amount: e.target.value } : c))}
+                                                                className="w-24 px-2 py-1 border border-slate-300 rounded text-sm font-mono text-right"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-sm font-mono w-24 text-right text-slate-700">{window.getCurrencySymbol()}{(parseFloat(selected.amount) || 0).toLocaleString()} 🔒</span>
+                                                        )
+                                                    )}
+                                                    {!selected && (
+                                                        <span className="text-xs text-slate-400 font-mono w-24 text-right">
+                                                            {charge.amount_type === 'percentage' ? `${charge.default_amount}%` : `${window.getCurrencySymbol()}${defaultAmt.toLocaleString()}`}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Totals */}
                             <div className="space-y-2 mb-4">
                                 <div className="flex justify-between text-sm">
@@ -1153,6 +1235,12 @@ export default function POSTerminal() {
                                         <span className="font-mono font-semibold">{window.getCurrencySymbol()}{tax.toLocaleString()}</span>
                                     </div>
                                 )}
+                                {selectedCharges.map(c => (
+                                    <div key={c.id} className="flex justify-between text-sm">
+                                        <span className="text-slate-600">{c.name}:</span>
+                                        <span className="font-mono font-semibold text-orange-700">+{window.getCurrencySymbol()}{(parseFloat(c.amount) || 0).toLocaleString()}</span>
+                                    </div>
+                                ))}
                                 <div className="border-t-2 border-slate-300 pt-2 flex justify-between items-center">
                                     <span className="text-lg font-semibold">Total:</span>
                                     <span className="text-3xl font-bold text-blue-800 font-mono">{window.getCurrencySymbol()}{total.toLocaleString()}</span>
@@ -1286,7 +1374,7 @@ export default function POSTerminal() {
                                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
-                                        title={creditDisabled ? (isWalkIn ? 'Credit not available for walk-in customers' : 'Insufficient credit limit') : ''}
+                                        title={creditDisabled ? (isWalkIn ? 'Credit not available for cash booking customers' : 'Insufficient credit limit') : ''}
                                     >
                                         {method === 'pos' ? 'POS/Card' : method === 'transfer' ? 'Transfer' : method === 'credit' ? 'Credit' : 'Cash'}
                                     </button>
@@ -1451,6 +1539,12 @@ export default function POSTerminal() {
                                         <span className="font-mono">{window.getCurrencySymbol()}{lastReceipt.tax.toLocaleString()}</span>
                                     </div>
                                 )}
+                                {(lastReceipt.charges || []).map((c, i) => (
+                                    <div key={i} className="flex justify-between text-sm text-blue-700">
+                                        <span>{c.name}:</span>
+                                        <span className="font-mono">{window.getCurrencySymbol()}{c.amount.toLocaleString()}</span>
+                                    </div>
+                                ))}
                                 <div className="flex justify-between text-lg font-bold border-t border-slate-300 pt-2">
                                     <span>Total:</span>
                                     <span className="font-mono">{window.getCurrencySymbol()}{lastReceipt.total.toLocaleString()}</span>

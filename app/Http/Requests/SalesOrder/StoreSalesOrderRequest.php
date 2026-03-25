@@ -29,6 +29,16 @@ class StoreSalesOrderRequest extends FormRequest
             'discount_amount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
             'delivery_address' => 'nullable|string',
+            'fdo_officer' => 'nullable|string|max:100',
+            'service_charges' => 'nullable|array',
+            'service_charges.*.name' => 'required_with:service_charges|string|max:100',
+            'service_charges.*.quantity' => 'required_with:service_charges|numeric|min:0',
+            'service_charges.*.amount' => 'required_with:service_charges|numeric|min:0',
+            'charges' => 'nullable|array',
+            'charges.*.sale_charge_id' => 'nullable|integer',
+            'charges.*.charge_name' => 'required_with:charges|string|max:255',
+            'charges.*.charge_amount' => 'required_with:charges|numeric|min:0',
+            'charges.*.add_to_credit' => 'nullable|boolean',
         ];
 
         // If formula-based order
@@ -37,7 +47,7 @@ class StoreSalesOrderRequest extends FormRequest
         } else {
             // Direct order
             $rules['items'] = 'required|array|min:1';
-            $rules['items.*.product_id'] = 'required|exists:products,id';
+            $rules['items.*.product_id'] = 'nullable|exists:products,id';
             $rules['items.*.quantity'] = 'required|numeric|min:0.01';
             $rules['items.*.unit_price'] = 'required|numeric|min:0';
         }

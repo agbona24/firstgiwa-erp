@@ -42,6 +42,7 @@ use App\Http\Controllers\API\Settings\CreditFacilityTypeController;
 use App\Http\Controllers\API\Settings\BackupController;
 use App\Http\Controllers\API\Settings\DocumentTemplateController;
 use App\Http\Controllers\API\Settings\ApiSettingsController;
+use App\Http\Controllers\API\Settings\SaleChargesController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\SetupController;
@@ -76,11 +77,19 @@ Route::prefix('v1')->group(function () {
         Route::post('/complete', [InstallController::class, 'completeInstallation']);
     });
     
+    // Industry template routes (public - for setup wizard)
+    Route::get('/industry-templates', [SetupController::class, 'getIndustryRegistry']);
+    Route::get('/industry-templates/{key}', [SetupController::class, 'getIndustryTemplate']);
+
     // Setup wizard routes (public - for initial system setup)
     Route::prefix('setup')->group(function () {
         Route::get('/status', [SetupController::class, 'checkStatus']);
         Route::post('/complete', [SetupController::class, 'completeSetup']);
     });
+
+    // Setup reset (protected — Super Admin only)
+    Route::post('/setup/reset', [SetupController::class, 'resetSetup'])
+        ->middleware('api.key.or.auth');
     
     // Protected routes
     Route::middleware('api.key.or.auth')->group(function () {
@@ -504,6 +513,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/api', [ApiSettingsController::class, 'index']);
             Route::put('/api', [ApiSettingsController::class, 'update']);
             Route::post('/api/rotate-key', [ApiSettingsController::class, 'rotateKey']);
+
+            // Sale Charges (Transport, Loading, Handling, etc.)
+            Route::get('/sale-charges', [SaleChargesController::class, 'index']);
+            Route::post('/sale-charges', [SaleChargesController::class, 'store']);
+            Route::put('/sale-charges/{charge}', [SaleChargesController::class, 'update']);
+            Route::delete('/sale-charges/{charge}', [SaleChargesController::class, 'destroy']);
+            Route::post('/sale-charges/{charge}/toggle-active', [SaleChargesController::class, 'toggleActive']);
         });
     });
 

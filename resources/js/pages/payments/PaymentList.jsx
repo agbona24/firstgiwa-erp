@@ -194,7 +194,7 @@ export default function PaymentList() {
         // Create thermal printer receipt (58mm/80mm width)
         const receiptWindow = window.open('', '_blank', 'width=300,height=600');
         
-        const customerName = payment.customer?.name || payment.supplier?.name || 'Walk-in Customer';
+        const customerName = payment.customer?.name || payment.supplier?.name || 'Cash Booking';
         const paymentDate = payment.payment_date ? new Date(payment.payment_date).toLocaleString() : new Date().toLocaleString();
         const amount = parseFloat(payment.amount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 });
         

@@ -49,6 +49,40 @@ export const completeSetup = async (setupData) => {
 };
 
 /**
+ * Reset the application to factory default (Super Admin only).
+ * Wipes all tenant data and returns the system to the setup state.
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export const resetSetup = async () => {
+    const token = localStorage.getItem('auth_token');
+    const response = await axios.post(
+        `${API_BASE}/setup/reset`,
+        {},
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    return response.data;
+};
+
+/**
+ * Get the industry template registry (categories and subcategories)
+ * @returns {Promise<Object>}
+ */
+export const getIndustryRegistry = async () => {
+    const response = await axios.get(`${API_BASE}/industry-templates`);
+    return response.data;
+};
+
+/**
+ * Get a specific industry template preview for the wizard
+ * @param {string} key - Template key (e.g., 'feed_mill')
+ * @returns {Promise<Object>}
+ */
+export const getIndustryTemplate = async (key) => {
+    const response = await axios.get(`${API_BASE}/industry-templates/${key}`);
+    return response.data;
+};
+
+/**
  * Helper to transform wizard form data to API format
  * @param {Object} wizardData - Data from SetupWizard component
  * @returns {Object} - Formatted data for API
@@ -74,6 +108,8 @@ export const formatWizardDataForAPI = (wizardData) => {
             enable_multi_branch: wizardData.multiBranch || false,
             enable_production: wizardData.enableProduction || false,
         },
+        industry_category: wizardData.industryCategory || null,
+        industry_subcategory: wizardData.industrySubcategory || null,
         warehouses: wizardData.warehouses || [],
         departments: wizardData.departments || [],
         products: {
@@ -91,5 +127,8 @@ export const formatWizardDataForAPI = (wizardData) => {
 export default {
     checkSetupStatus,
     completeSetup,
+    resetSetup,
+    getIndustryRegistry,
+    getIndustryTemplate,
     formatWizardDataForAPI,
 };

@@ -130,20 +130,20 @@ export default function InventoryList() {
             const items = allData?.data || [];
             setStats({
                 total: allData.total || items.length,
-                rawMaterials: items.filter(i => i.product?.inventory_type === 'raw_material').length,
-                finishedGoods: items.filter(i => i.product?.inventory_type === 'finished_good').length,
+                rawMaterials: items.filter(i => i.inventory_type === 'raw_material').length,
+                finishedGoods: items.filter(i => i.inventory_type === 'finished_good').length,
                 lowStock: items.filter(i => {
                     const qty = i.quantity || 0;
-                    const reorder = i.product?.reorder_level || 0;
-                    const critical = i.product?.critical_level || 0;
+                    const reorder = i.reorder_level || 0;
+                    const critical = i.critical_level || 0;
                     return qty > critical && qty <= reorder;
                 }).length,
                 critical: items.filter(i => {
                     const qty = i.quantity || 0;
-                    const critical = i.product?.critical_level || 0;
+                    const critical = i.critical_level || 0;
                     return qty <= critical && qty > 0;
                 }).length,
-                totalValue: items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.product?.cost_price || 0)), 0),
+                totalValue: items.reduce((sum, i) => sum + ((i.quantity || 0) * (i.cost_price || 0)), 0),
             });
         } catch (error) {
             console.error('Error fetching stats:', error);
@@ -166,28 +166,32 @@ export default function InventoryList() {
 
             const response = await inventoryAPI.getInventory(params);
             
-            // Transform API data to match UI expectations
+            // Transform API data to match UI expectations.
+            // The API now returns Product objects with inventory totals as top-level fields.
             const dataArray = response?.data || [];
             const transformedData = dataArray.map(item => ({
                 id: item.id,
-                sku: item.product?.sku || 'N/A',
-                name: item.product?.name || 'Unknown',
-                category: item.product?.category?.name || 'Uncategorized',
-                inventory_type: item.product?.inventory_type || 'raw_material',
+                sku: item.sku || 'N/A',
+                name: item.name || 'Unknown',
+                category: item.category?.name || 'Uncategorized',
+                inventory_type: item.inventory_type || 'raw_material',
                 stock: item.quantity || 0,
                 reserved: item.reserved_quantity || 0,
                 available: item.available_quantity || 0,
-                min_stock: item.product?.reorder_level || 0,
-                critical_level: item.product?.critical_level || 0,
-                unit: item.product?.unit_of_measure || 'kg',
-                secondary_unit: item.product?.secondary_unit,
-                conversion_factor: item.product?.conversion_factor,
-                cost_price: item.product?.cost_price || 0,
-                selling_price: item.product?.selling_price || 0,
-                warehouse: item.warehouse?.name || 'Unknown',
+                min_stock: item.reorder_level || 0,
+                critical_level: item.critical_level || 0,
+                unit: item.unit_of_measure || 'kg',
+                secondary_unit: item.secondary_unit,
+                conversion_factor: item.conversion_factor,
+                cost_price: item.cost_price || 0,
+                selling_price: item.selling_price || 0,
+                warehouse: item.warehouse_count > 1
+                    ? `${item.warehouse_count} Warehouses`
+                    : (item.warehouse_count === 1 ? '1 Warehouse' : 'No Warehouse'),
+                warehouse_count: item.warehouse_count || 0,
                 status: getInventoryStatus(item),
-                barcode: item.product?.barcode,
-                batch_count: 0, // Will be updated if batches data available
+                barcode: item.barcode,
+                batch_count: 0,
             }));
 
             setInventory(transformedData);
@@ -208,8 +212,8 @@ export default function InventoryList() {
     // Helper to determine inventory status
     const getInventoryStatus = (item) => {
         const quantity = item.quantity || 0;
-        const reorderLevel = item.product?.reorder_level || 0;
-        const criticalLevel = item.product?.critical_level || 0;
+        const reorderLevel = item.reorder_level ?? 0;
+        const criticalLevel = item.critical_level ?? 0;
         
         if (quantity <= 0) return 'out_of_stock';
         if (quantity <= criticalLevel) return 'critical';
@@ -702,11 +706,12 @@ export default function InventoryList() {
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Warehouse</label>
                                 <select value={productForm.warehouse_id} onChange={(e) => setProductForm({...productForm, warehouse_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                                    <option value="">Select warehouse...</option>
+                                    <option value="">All Warehouses (create record in each)</option>
                                     {warehouses.map((w) => (
                                         <option key={w.id} value={w.id}>{w.name}</option>
                                     ))}
                                 </select>
+                                <p className="text-xs text-slate-500 mt-1">Leave as "All Warehouses" to track stock across every warehouse.</p>
                             </div>
                         </div>
                         {!productForm.id && (

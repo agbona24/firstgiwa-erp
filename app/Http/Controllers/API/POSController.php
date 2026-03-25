@@ -46,7 +46,13 @@ class POSController extends Controller
                 ->where('quantity', '>', 0)
                 ->exists();
 
-        $query = Product::where('tenant_id', $tenantId)
+        $query = Product::where(function ($q) use ($tenantId) {
+                // Include products belonging to this tenant OR legacy products
+                // that predate the tenant_id column (tenant_id IS NULL).
+                if ($tenantId) {
+                    $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+                }
+            })
             ->where('is_active', true)
             ->with(['category', 'inventories' => function ($q) use ($tenantId, $hasInventoryForBranch, $warehouseIdsForBranch) {
                 // Get inventory from warehouses
@@ -91,7 +97,7 @@ class POSController extends Controller
                 'category_id' => $product->category_id,
                 'category_name' => $product->category?->name ?? 'Uncategorized',
                 'lowStockThreshold' => $lowStockThreshold,
-                'unit' => $product->unit,
+                'unit' => $product->unit_of_measure,
             ];
         });
 
@@ -174,7 +180,7 @@ class POSController extends Controller
             });
         }
 
-        // Get walk-in customer first, then other customers
+        // Get cash booking customer first, then other customers
         $walkInCustomer = Customer::where('tenant_id', $tenantId)
             ->where('customer_type', 'walk-in')
             ->first($customerFields);
@@ -213,6 +219,11 @@ class POSController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'amount_received' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'charges' => 'nullable|array',
+            'charges.*.sale_charge_id' => 'nullable|integer',
+            'charges.*.charge_name' => 'required_with:charges|string',
+            'charges.*.charge_amount' => 'required_with:charges|numeric|min:0',
+            'charges.*.add_to_credit' => 'nullable|boolean',
         ]);
 
         $tenantId = Auth::user()->tenant_id;
@@ -256,7 +267,15 @@ class POSController extends Controller
             // Calculate tax using rate from request (or no tax if not provided)
             $taxRate = $request->input('tax_rate', 0);
             $taxAmount = ($subtotal - $discountAmount) * $taxRate;
-            $total = $subtotal - $discountAmount + $taxAmount;
+
+            // Sum delivery/sale charges
+            $chargesData = $request->input('charges', []);
+            $chargesTotal = 0;
+            foreach ($chargesData as $charge) {
+                $chargesTotal += floatval($charge['charge_amount']);
+            }
+
+            $total = $subtotal - $discountAmount + $taxAmount + $chargesTotal;
 
             // Generate order number
             $lastOrder = SalesOrder::where('tenant_id', $tenantId)
@@ -348,6 +367,23 @@ class POSController extends Controller
                 }
             }
 
+            // Save applied delivery/sale charges
+            if (!empty($chargesData)) {
+                foreach ($chargesData as $charge) {
+                    DB::table('order_charges')->insert([
+                        'chargeable_type' => SalesOrder::class,
+                        'chargeable_id'   => $salesOrder->id,
+                        'sale_charge_id'  => $charge['sale_charge_id'] ?? null,
+                        'charge_name'     => $charge['charge_name'],
+                        'charge_amount'   => floatval($charge['charge_amount']),
+                        'add_to_credit'   => !empty($charge['add_to_credit']),
+                        'credited'        => false,
+                        'created_at'      => now(),
+                        'updated_at'      => now(),
+                    ]);
+                }
+            }
+
             // Create payment record or credit transaction
             if ($isCredit) {
                 // Create credit transaction for tracking
@@ -382,8 +418,8 @@ class POSController extends Controller
             // Create notification for POS sale
             try {
                 $customerName = $request->customer_id 
-                    ? Customer::find($request->customer_id)?->name ?? 'Walk-in Customer'
-                    : 'Walk-in Customer';
+                    ? Customer::find($request->customer_id)?->name ?? 'Cash Booking'
+                    : 'Cash Booking';
                 
                 NotificationService::create([
                     'tenant_id' => $tenantId,
@@ -412,12 +448,17 @@ class POSController extends Controller
                 'date' => now()->format('M d, Y h:i A'),
                 'customer' => $request->customer_id 
                     ? Customer::find($request->customer_id, ['id', 'name', 'phone']) 
-                    : ['id' => null, 'name' => 'Walk-in Customer', 'phone' => ''],
+                    : ['id' => null, 'name' => 'Cash Booking', 'phone' => ''],
                 'items' => $items,
                 'subtotal' => $subtotal,
                 'discount' => $discountAmount,
                 'tax' => $taxAmount,
                 'taxName' => $request->input('tax_name', 'Tax'),
+                'charges' => array_values(array_map(fn($c) => [
+                    'name' => $c['charge_name'],
+                    'amount' => floatval($c['charge_amount']),
+                ], $chargesData)),
+                'chargesTotal' => $chargesTotal,
                 'total' => $total,
                 'paymentMethod' => $request->payment_method,
                 'amountReceived' => $request->amount_received ?? $total,
