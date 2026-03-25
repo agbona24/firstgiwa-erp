@@ -124,6 +124,15 @@ export const saleChargesAPI = {
     toggleActive: (id) => api.post(`/settings/sale-charges/${id}/toggle-active`),
 };
 
+// Sale Categories (2mm, 3mm, 4mm, etc.)
+export const saleCategoriesAPI = {
+    list: () => api.get('/settings/sale-categories'),
+    create: (data) => api.post('/settings/sale-categories', data),
+    update: (id, data) => api.put(`/settings/sale-categories/${id}`, data),
+    delete: (id) => api.delete(`/settings/sale-categories/${id}`),
+    toggleStatus: (id) => api.post(`/settings/sale-categories/${id}/toggle-status`),
+};
+
 // Credit Facility Settings
 export const creditSettingsAPI = {
     get: () => api.get('/settings/credit'),
@@ -185,6 +194,7 @@ export default {
     templates: templatesAPI,
     credit: creditSettingsAPI,
     saleCharges: saleChargesAPI,
+    saleCategories: saleCategoriesAPI,
     creditFacilityTypes: creditFacilityTypesAPI,
     backup: backupAPI,
     api: apiSettingsAPI,

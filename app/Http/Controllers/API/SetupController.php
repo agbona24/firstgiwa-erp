@@ -13,6 +13,7 @@ use App\Models\Unit;
 use App\Models\Setting;
 use App\Models\BankAccount;
 use App\Services\IndustryTemplateSeeder;
+use App\Services\TenantDefaultsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -331,6 +332,9 @@ class SetupController extends Controller
             // Mark setup as complete
             Setting::set('system', 'setup_complete', true, $tenant->id);
             Setting::set('system', 'setup_date', now()->toISOString(), $tenant->id);
+
+            // Seed default settings for the new tenant
+            TenantDefaultsService::seedForTenant($tenant->id);
 
             DB::commit();
 

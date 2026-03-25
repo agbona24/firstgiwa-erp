@@ -43,6 +43,7 @@ use App\Http\Controllers\API\Settings\BackupController;
 use App\Http\Controllers\API\Settings\DocumentTemplateController;
 use App\Http\Controllers\API\Settings\ApiSettingsController;
 use App\Http\Controllers\API\Settings\SaleChargesController;
+use App\Http\Controllers\API\Settings\SaleCategoryController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\NotificationController;
 use App\Http\Controllers\API\SetupController;
@@ -520,6 +521,13 @@ Route::prefix('v1')->group(function () {
             Route::put('/sale-charges/{charge}', [SaleChargesController::class, 'update']);
             Route::delete('/sale-charges/{charge}', [SaleChargesController::class, 'destroy']);
             Route::post('/sale-charges/{charge}/toggle-active', [SaleChargesController::class, 'toggleActive']);
+
+            // Sale Categories (e.g. 2mm, 3mm, 4mm)
+            Route::get('/sale-categories', [SaleCategoryController::class, 'index']);
+            Route::post('/sale-categories', [SaleCategoryController::class, 'store']);
+            Route::put('/sale-categories/{saleCategory}', [SaleCategoryController::class, 'update']);
+            Route::delete('/sale-categories/{saleCategory}', [SaleCategoryController::class, 'destroy']);
+            Route::post('/sale-categories/{saleCategory}/toggle-status', [SaleCategoryController::class, 'toggleStatus']);
         });
     });
 

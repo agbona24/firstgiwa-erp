@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\TenantDefaultsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -105,6 +106,9 @@ class RegisterController extends Controller
                 'admin_email' => $validated['admin_email'],
                 'source' => 'public_signup',
             ]);
+
+            // 9. Seed default settings for the new tenant
+            TenantDefaultsService::seedForTenant($tenant->id);
 
             return response()->json([
                 'success' => true,

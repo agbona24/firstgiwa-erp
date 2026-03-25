@@ -30,12 +30,12 @@ class DocumentController extends Controller
      */
     public function invoice(SalesOrder $salesOrder)
     {
-        $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges']);
-
+$salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges', 'saleCategory']);
+        
         $data = $this->getCommonData('Invoice');
         $data['salesOrder'] = $salesOrder;
         $data['previousBalance'] = $this->getCustomerPreviousBalance($salesOrder);
-
+        
         $pdf = Pdf::loadView('pdf.invoice', $data);
 
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
@@ -47,7 +47,7 @@ class DocumentController extends Controller
      */
     public function invoicePreview(SalesOrder $salesOrder)
     {
-        $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges']);
+        $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges', 'saleCategory']);
 
         $data = $this->getCommonData('Invoice');
         $data['salesOrder'] = $salesOrder;

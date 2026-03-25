@@ -7,6 +7,7 @@ use App\Models\AdminActivityLog;
 use App\Models\Branch;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantDefaultsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -102,6 +103,9 @@ class TenantController extends Controller
                 'plan' => $tenant->plan,
                 'admin_email' => $validated['admin_email'],
             ]);
+
+            // Seed default settings for the new tenant
+            TenantDefaultsService::seedForTenant($tenant->id);
 
             return response()->json([
                 'message' => 'Tenant created successfully',

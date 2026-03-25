@@ -10,11 +10,15 @@ use Illuminate\Support\Facades\Auth;
 class CreditFacilityTypeController extends Controller
 {
     /**
-     * Get all credit facility types
+     * Get all credit facility types for the current tenant
      */
     public function index()
     {
-        $types = CreditFacilityType::orderBy('name')->get();
+        $tenantId = Auth::user()->tenant_id;
+
+        $types = CreditFacilityType::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -29,7 +33,7 @@ class CreditFacilityTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:credit_facility_types,code',
+            'code' => 'required|string|max:50|unique:credit_facility_types,code,NULL,id,tenant_id,' . (Auth::user()->tenant_id ?? 'NULL'),
             'default_limit' => 'required|numeric|min:0',
             'max_limit' => 'required|numeric|min:0',
             'payment_terms' => 'required|integer|min:1',
@@ -75,7 +79,7 @@ class CreditFacilityTypeController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:credit_facility_types,code,' . $creditFacilityType->id,
+            'code' => 'required|string|max:50|unique:credit_facility_types,code,' . $creditFacilityType->id . ',id,tenant_id,' . (Auth::user()->tenant_id ?? 'NULL'),
             'default_limit' => 'required|numeric|min:0',
             'max_limit' => 'required|numeric|min:0',
             'payment_terms' => 'required|integer|min:1',

@@ -6,7 +6,7 @@ import Badge from '../../components/ui/Badge';
 import { useToast } from '../../contexts/ToastContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import posAPI from '../../services/posAPI';
-import { taxesAPI, bankAccountsAPI, saleChargesAPI } from '../../services/settingsAPI';
+import { taxesAPI, bankAccountsAPI, saleChargesAPI, saleCategoriesAPI } from '../../services/settingsAPI';
 import OpenRegisterModal from './OpenRegisterModal';
 import CloseRegisterModal from './CloseRegisterModal';
 
@@ -52,6 +52,10 @@ export default function POSTerminal() {
     // Customer search
     const [customerSearch, setCustomerSearch] = useState('');
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+    // Sale categories (2mm, 3mm, 4mm…)
+    const [saleCategories, setSaleCategories] = useState([]);
+    const [selectedSaleCategoryId, setSelectedSaleCategoryId] = useState('');
 
     const toast = useToast();
     const confirm = useConfirm();
@@ -108,14 +112,15 @@ export default function POSTerminal() {
     const fetchInitialData = async () => {
         try {
             setLoading(true);
-            const [productsRes, customersRes, categoriesRes, ticketsRes, taxesRes, bankAccountsRes, chargesRes] = await Promise.all([
+            const [productsRes, customersRes, categoriesRes, ticketsRes, taxesRes, bankAccountsRes, chargesRes, saleCatRes] = await Promise.all([
                 posAPI.getProducts(),
                 posAPI.getCustomers(),
                 posAPI.getCategories(),
                 posAPI.getTickets(),
                 taxesAPI.list(),
                 bankAccountsAPI.list(),
-                saleChargesAPI.list({ context: 'pos', active_only: true })
+                saleChargesAPI.list({ context: 'pos', active_only: true }),
+                saleCategoriesAPI.list()
             ]);
             
             setProducts(productsRes.data || []);
@@ -137,6 +142,10 @@ export default function POSTerminal() {
             // Load available delivery/sale charges for POS
             const chargeData = chargesRes.data?.data?.charges || [];
             setAvailableCharges(Array.isArray(chargeData) ? chargeData : []);
+
+            // Load sale categories
+            const catData = saleCatRes.data?.data || [];
+            setSaleCategories(Array.isArray(catData) ? catData.filter(c => c.is_active) : []);
 
             // Set default cash booking customer
             const walkIn = customersRes.data?.find(c => c.customer_type === 'walk-in');
@@ -453,6 +462,7 @@ export default function POSTerminal() {
                     charge_amount: parseFloat(c.amount) || 0,
                     add_to_credit: !!c.add_to_credit,
                 })),
+                sale_category_id: selectedSaleCategoryId || null,
             });
 
             if (response.success) {
@@ -466,6 +476,7 @@ export default function POSTerminal() {
                 setDiscount(0);
                 setAmountReceived('');
                 setSelectedCharges([]);
+                setSelectedSaleCategoryId('');
                 setShowPaymentModal(false);
                 setShowReceiptModal(true);
                 toast.success('Sale completed successfully!');
@@ -610,6 +621,9 @@ export default function POSTerminal() {
         receipt += `Customer: ${lastReceipt.customer?.name || 'Cash Booking'}\n`;
         if (lastReceipt.customer?.phone) {
             receipt += `Phone: ${lastReceipt.customer.phone}\n`;
+        }
+        if (lastReceipt.saleCategory) {
+            receipt += `Category: ${lastReceipt.saleCategory}\n`;
         }
         receipt += line() + '\n';
         
@@ -994,6 +1008,28 @@ export default function POSTerminal() {
                     </div>
                 </div>
             </div>
+
+            {/* Sale Category — shown below customer row when categories exist */}
+            {saleCategories.length > 0 && (
+                <div className="mb-4 flex items-center gap-3 flex-wrap">
+                    <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Item Category</label>
+                    <select
+                        value={selectedSaleCategoryId}
+                        onChange={(e) => setSelectedSaleCategoryId(e.target.value)}
+                        className="px-3 py-2 border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none text-sm min-w-[160px]"
+                    >
+                        <option value="">— Select category —</option>
+                        {saleCategories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                    </select>
+                    {selectedSaleCategoryId && (
+                        <button onClick={() => setSelectedSaleCategoryId('')} className="text-xs text-slate-400 hover:text-slate-600">
+                            ✕ Clear
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Products Grid */}

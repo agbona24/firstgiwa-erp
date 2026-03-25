@@ -227,6 +227,7 @@ class POSController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'amount_received' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'sale_category_id' => 'nullable|integer|exists:sale_categories,id',
             'charges' => 'nullable|array',
             'charges.*.sale_charge_id' => 'nullable|integer',
             'charges.*.charge_name' => 'required_with:charges|string',
@@ -324,6 +325,7 @@ class POSController extends Controller
                 'total_amount' => $total,
                 'order_date' => now(),
                 'notes' => $request->notes,
+                'sale_category_id' => $request->sale_category_id,
                 'created_by' => $user->id,
             ]);
 
@@ -472,6 +474,9 @@ class POSController extends Controller
                 'amountReceived' => $request->amount_received ?? $total,
                 'change' => ($request->amount_received ?? $total) - $total,
                 'cashier' => $user->name,
+                'saleCategory' => $request->sale_category_id
+                    ? \App\Models\SaleCategory::find($request->sale_category_id)?->name
+                    : null,
             ];
 
             return response()->json([

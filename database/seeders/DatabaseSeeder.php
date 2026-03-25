@@ -41,6 +41,9 @@ class DatabaseSeeder extends Seeder
             // Business Partners
             CustomerSeeder::class,
             SupplierSeeder::class,
+
+            // Credit
+            CreditFacilityTypeSeeder::class,
             
             // Production & HR (Skip for now - schema mismatch)
             // FormulaSeeder::class,

@@ -120,9 +120,9 @@
         </div>
     </div>
 
-    {{-- CATEGORY (formula name) --}}
+    {{-- CATEGORY --}}
     <div class="category-row">
-        CATEGORY:&nbsp; <span>{{ $salesOrder->formula->name ?? strtoupper($salesOrder->order_type ?? '') }}</span>
+        CATEGORY:&nbsp; <span>{{ $salesOrder->saleCategory->name ?? $salesOrder->formula->name ?? strtoupper($salesOrder->order_type ?? '') }}</span>
     </div>
 
     {{-- ITEMS TABLE --}}

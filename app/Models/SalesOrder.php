@@ -34,6 +34,7 @@ class SalesOrder extends Model
         'credit_available',
         'notes',
         'fdo_officer',
+        'sale_category_id',
         'delivery_address',
         'created_by',
         'approved_by',
@@ -58,6 +59,11 @@ class SalesOrder extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function saleCategory()
+    {
+        return $this->belongsTo(\App\Models\SaleCategory::class);
     }
 
     public function formula()

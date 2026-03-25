@@ -11,7 +11,7 @@ import settingsAPI, {
     approvalsAPI, payrollSettingsAPI, fiscalYearAPI, notificationSettingsAPI,
     smsSettingsAPI, emailSettingsAPI, printSettingsAPI, creditSettingsAPI, 
     creditFacilityTypesAPI, backupAPI, templatesAPI, apiSettingsAPI,
-    saleChargesAPI
+    saleChargesAPI, saleCategoriesAPI
 } from '../../services/settingsAPI';
 import documentAPI, { openPdfInNewTab } from '../../services/documentAPI';
 import warehouseAPI from '../../services/warehouseAPI';
@@ -28,6 +28,7 @@ const sections = [
     { key: 'sales', label: 'Sales & Billing', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
     { key: 'taxes', label: 'Taxes', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
     { key: 'charges', label: 'Sale Charges', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
+    { key: 'sale_categories', label: 'Sale Categories', icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z' },
     { key: 'payment_methods', label: 'Payment Methods', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
     { key: 'banks', label: 'Banks & Accounts', icon: 'M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4z' },
     { key: 'sequences', label: 'Number Sequences', icon: 'M7 20l4-16m2 16l4-16M6 9h14M4 15h14' },
@@ -179,6 +180,51 @@ export default function Settings() {
     const [editingCharge, setEditingCharge] = useState(null);
     const defaultChargeForm = { name: '', description: '', amount_type: 'fixed', default_amount: '', applies_to: 'both', add_to_credit: false, allow_override: true };
     const [chargeForm, setChargeForm] = useState(defaultChargeForm);
+
+    // Sale Categories (2mm, 3mm, 4mm, etc.)
+    const [saleCategories, setSaleCategories] = useState([]);
+    const [showAddSaleCategory, setShowAddSaleCategory] = useState(false);
+    const [editingSaleCategory, setEditingSaleCategory] = useState(null);
+    const defaultSaleCategoryForm = { name: '', description: '' };
+    const [saleCategoryForm, setSaleCategoryForm] = useState(defaultSaleCategoryForm);
+
+    const handleSaveSaleCategory = async () => {
+        if (!saleCategoryForm.name.trim()) { toast.error('Name is required'); return; }
+        setSaving(true);
+        try {
+            if (editingSaleCategory) {
+                await saleCategoriesAPI.update(editingSaleCategory.id, saleCategoryForm);
+                setSaleCategories(prev => prev.map(c => c.id === editingSaleCategory.id ? { ...c, ...saleCategoryForm } : c));
+                toast.success('Category updated');
+            } else {
+                const res = await saleCategoriesAPI.create(saleCategoryForm);
+                setSaleCategories(prev => [...prev, res.data?.data || { id: Date.now(), ...saleCategoryForm, is_active: true }]);
+                toast.success('Category created');
+            }
+            setShowAddSaleCategory(false);
+            setEditingSaleCategory(null);
+            setSaleCategoryForm(defaultSaleCategoryForm);
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to save category');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleToggleSaleCategoryStatus = async (c) => {
+        try {
+            await saleCategoriesAPI.toggleStatus(c.id);
+            setSaleCategories(prev => prev.map(x => x.id === c.id ? { ...x, is_active: !x.is_active } : x));
+        } catch (e) { toast.error('Failed to update status'); }
+    };
+
+    const handleDeleteSaleCategory = async (c) => {
+        try {
+            await saleCategoriesAPI.delete(c.id);
+            setSaleCategories(prev => prev.filter(x => x.id !== c.id));
+            toast.success('Category deleted');
+        } catch (e) { toast.error('Failed to delete'); }
+    };
 
     const handleSaveCharge = async () => {
         if (!chargeForm.name || chargeForm.default_amount === '') {
@@ -800,6 +846,11 @@ export default function Settings() {
                     const res = await saleChargesAPI.list();
                     const charges = res.data?.data?.charges || [];
                     setSaleCharges(Array.isArray(charges) ? charges : []);
+                    break;
+                }
+                case 'sale_categories': {
+                    const res = await saleCategoriesAPI.list();
+                    setSaleCategories(res.data?.data || []);
                     break;
                 }
                 case 'payment_methods': {
@@ -2150,6 +2201,94 @@ ${md
                         <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
                             <strong>Note:</strong> Sale charges (transport, loading, etc.) are different from taxes. These are operational costs passed to the customer and can optionally be added to their credit account on delivery.
                         </div>
+                    </div>
+                );
+
+            case 'sale_categories':
+                return (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900">Sale Categories</h3>
+                                <p className="text-sm text-slate-500 mt-1">Define product/batch categories selectable at point of sale (e.g. 2mm, 3mm, 4mm). These appear on invoices and receipts.</p>
+                            </div>
+                            <Button onClick={() => { setEditingSaleCategory(null); setSaleCategoryForm(defaultSaleCategoryForm); setShowAddSaleCategory(true); }}>+ Add Category</Button>
+                        </div>
+
+                        {showAddSaleCategory && (
+                            <Card><CardBody className="p-4 space-y-4 border-2 border-blue-200">
+                                <h4 className="font-semibold text-slate-800">{editingSaleCategory ? 'Edit' : 'New'} Category</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Name *</label>
+                                        <input type="text" value={saleCategoryForm.name} onChange={(e) => setSaleCategoryForm({ ...saleCategoryForm, name: e.target.value })} className={inputClass} placeholder="e.g. 2mm, 4mm, 25 kilos" />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Description (optional)</label>
+                                        <input type="text" value={saleCategoryForm.description} onChange={(e) => setSaleCategoryForm({ ...saleCategoryForm, description: e.target.value })} className={inputClass} placeholder="Short description" />
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 pt-2">
+                                    <Button onClick={handleSaveSaleCategory} disabled={saving}>{saving ? 'Saving...' : (editingSaleCategory ? 'Update' : 'Create')}</Button>
+                                    <Button variant="outline" onClick={() => { setShowAddSaleCategory(false); setEditingSaleCategory(null); }}>Cancel</Button>
+                                </div>
+                            </CardBody></Card>
+                        )}
+
+                        {/* Active categories */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">Active ({saleCategories.filter(c => c.is_active).length})</h4>
+                            <div className="space-y-2">
+                                {saleCategories.filter(c => c.is_active).map(c => (
+                                    <Card key={c.id}><CardBody className="p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                                                </div>
+                                                <div>
+                                                    <span className="font-semibold text-slate-900">{c.name}</span>
+                                                    {c.description && <div className="text-xs text-slate-500 mt-0.5">{c.description}</div>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <button className="text-sm text-blue-600 hover:text-blue-800" onClick={() => { setEditingSaleCategory(c); setSaleCategoryForm({ name: c.name, description: c.description || '' }); setShowAddSaleCategory(true); }}>Edit</button>
+                                                <button className="text-sm text-amber-600 hover:text-amber-800" onClick={() => handleToggleSaleCategoryStatus(c)}>Deactivate</button>
+                                            </div>
+                                        </div>
+                                    </CardBody></Card>
+                                ))}
+                                {saleCategories.filter(c => c.is_active).length === 0 && (
+                                    <div className="text-center py-6 text-slate-400 text-sm">No active categories. Add your first category above.</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Inactive categories */}
+                        {saleCategories.some(c => !c.is_active) && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Inactive ({saleCategories.filter(c => !c.is_active).length})</h4>
+                                <div className="space-y-2">
+                                    {saleCategories.filter(c => !c.is_active).map(c => (
+                                        <Card key={c.id}><CardBody className="p-4 opacity-60">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                                                        <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
+                                                    </div>
+                                                    <span className="font-semibold text-slate-700">{c.name}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <button className="text-sm text-blue-600 hover:text-blue-800" onClick={() => { setEditingSaleCategory(c); setSaleCategoryForm({ name: c.name, description: c.description || '' }); setShowAddSaleCategory(true); }}>Edit</button>
+                                                    <button className="text-sm text-green-600 hover:text-green-800" onClick={() => handleToggleSaleCategoryStatus(c)}>Activate</button>
+                                                    <button className="text-sm text-red-600 hover:text-red-800" onClick={() => handleDeleteSaleCategory(c)}>Delete</button>
+                                                </div>
+                                            </div>
+                                        </CardBody></Card>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
 
