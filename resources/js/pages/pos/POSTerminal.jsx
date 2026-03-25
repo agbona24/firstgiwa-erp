@@ -1042,16 +1042,16 @@ export default function POSTerminal() {
                         if (!showStrip) return null;
 
                         return (
-                            <div className="border-t border-slate-100 bg-slate-50 rounded-b-xl px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+                            <div className="border-t border-slate-100 bg-slate-50 rounded-b-xl px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
 
                                 {/* Sale Category */}
                                 {saleCategories.length > 0 && (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-shrink-0">
                                         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Category</span>
                                         <select
                                             value={selectedSaleCategoryId}
                                             onChange={(e) => setSelectedSaleCategoryId(e.target.value)}
-                                            className="px-2.5 py-1 border border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm bg-white text-slate-800"
+                                            className="px-3 py-1.5 border border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm font-medium bg-white text-slate-800"
                                         >
                                             <option value="">— Select —</option>
                                             {saleCategories.map(cat => (
@@ -1066,49 +1066,59 @@ export default function POSTerminal() {
 
                                 {/* Divider */}
                                 {saleCategories.length > 0 && hasCreditFacility && (
-                                    <div className="w-px h-6 bg-slate-200 hidden sm:block" />
+                                    <div className="w-px self-stretch bg-slate-200 hidden sm:block" />
                                 )}
 
-                                {/* Credit Facility */}
+                                {/* Credit Facility — expands to fill remaining space */}
                                 {hasCreditFacility && (
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                        <div className="flex items-center gap-1.5 text-slate-400">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className="flex-1 flex items-center gap-6 min-w-0">
+                                        {/* Icon + label */}
+                                        <div className="flex items-center gap-1.5 text-slate-500 flex-shrink-0">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                             </svg>
-                                            <span className="text-xs font-semibold uppercase tracking-wide">Credit</span>
+                                            <span className="text-xs font-bold uppercase tracking-wide">Credit</span>
                                         </div>
 
                                         {isBlocked ? (
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
-                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-sm font-bold">
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                                     <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
                                                 </svg>
-                                                Blocked
+                                                Credit Blocked
                                             </span>
                                         ) : (
                                             <>
-                                                <div>
-                                                    <p className="text-xs text-slate-400 leading-none">Limit</p>
-                                                    <p className="text-sm font-semibold text-slate-700 leading-tight">{fmt(creditLimit)}</p>
+                                                {/* Limit */}
+                                                <div className="flex-shrink-0">
+                                                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide leading-none mb-1">Limit</p>
+                                                    <p className="text-base font-bold text-slate-700">{fmt(creditLimit)}</p>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs text-slate-400 leading-none">Used</p>
-                                                    <p className="text-sm font-semibold text-amber-500 leading-tight">{fmt(outstanding)}</p>
+                                                {/* Used */}
+                                                <div className="flex-shrink-0">
+                                                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide leading-none mb-1">Used</p>
+                                                    <p className="text-base font-bold text-amber-500">{fmt(outstanding)}</p>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs text-slate-400 leading-none">Remaining</p>
-                                                    <p className={`text-sm font-bold leading-tight ${remaining <= 0 ? 'text-red-600' : usedPct >= 80 ? 'text-amber-600' : 'text-green-600'}`}>
+                                                {/* Remaining — highlighted */}
+                                                <div className="flex-shrink-0 px-3 py-1 rounded-lg bg-white border border-slate-200">
+                                                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide leading-none mb-1">Remaining</p>
+                                                    <p className={`text-base font-extrabold ${remaining <= 0 ? 'text-red-600' : usedPct >= 80 ? 'text-amber-600' : 'text-green-600'}`}>
                                                         {fmt(Math.max(0, remaining))}
                                                     </p>
                                                 </div>
-                                                <div className="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden" title={`${usedPct.toFixed(0)}% used`}>
-                                                    <div
-                                                        className={`h-full rounded-full transition-all duration-500 ${usedPct >= 100 ? 'bg-red-500' : usedPct >= 80 ? 'bg-amber-500' : 'bg-green-500'}`}
-                                                        style={{ width: `${Math.min(usedPct, 100)}%` }}
-                                                    />
+                                                {/* Progress bar — takes remaining space */}
+                                                <div className="flex-1 min-w-[80px]">
+                                                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                                                        <span>Credit used</span>
+                                                        <span className="font-semibold">{usedPct.toFixed(0)}%</span>
+                                                    </div>
+                                                    <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-500 ${usedPct >= 100 ? 'bg-red-500' : usedPct >= 80 ? 'bg-amber-500' : 'bg-green-500'}`}
+                                                            style={{ width: `${Math.min(usedPct, 100)}%` }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <span className="text-xs text-slate-400">{usedPct.toFixed(0)}%</span>
                                             </>
                                         )}
                                     </div>
