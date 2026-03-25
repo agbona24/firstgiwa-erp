@@ -100,6 +100,12 @@ class CustomerService extends BaseService
             $data['credit_blocked'] = false;
             $data['is_active'] = $data['is_active'] ?? true;
 
+            // Stamp tenant_id so the customer is visible in tenant-scoped queries (e.g. POS).
+            $user = $this->user();
+            if ($user) {
+                $data['tenant_id'] = $data['tenant_id'] ?? $user->tenant_id;
+            }
+
             $customer = Customer::create($data);
 
             return $customer->fresh(['creditFacilityType']);

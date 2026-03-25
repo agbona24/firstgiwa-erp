@@ -12,6 +12,7 @@ class Customer extends Model
     use HasFactory, SoftDeletes, Auditable;
 
     protected $fillable = [
+        'tenant_id',
         'customer_code',
         'name',
         'email',

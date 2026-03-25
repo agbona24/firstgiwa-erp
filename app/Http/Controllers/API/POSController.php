@@ -167,7 +167,11 @@ class POSController extends Controller
         // Fields needed for POS including credit info
         $customerFields = ['id', 'name', 'phone', 'email', 'customer_type', 'credit_limit', 'outstanding_balance', 'credit_blocked', 'payment_terms_days'];
 
-        $query = Customer::where('tenant_id', $tenantId)
+        $query = Customer::where(function ($q) use ($tenantId) {
+                if ($tenantId) {
+                    $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+                }
+            })
             ->where('is_active', true);
 
         // Search
@@ -181,7 +185,11 @@ class POSController extends Controller
         }
 
         // Get cash booking customer first, then other customers
-        $walkInCustomer = Customer::where('tenant_id', $tenantId)
+        $walkInCustomer = Customer::where(function ($q) use ($tenantId) {
+                if ($tenantId) {
+                    $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+                }
+            })
             ->where('customer_type', 'walk-in')
             ->first($customerFields);
         
