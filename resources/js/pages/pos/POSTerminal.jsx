@@ -1009,27 +1009,96 @@ export default function POSTerminal() {
                 </div>
             </div>
 
-            {/* Sale Category — shown below customer row when categories exist */}
-            {saleCategories.length > 0 && (
-                <div className="mb-4 flex items-center gap-3 flex-wrap">
-                    <label className="text-sm font-medium text-slate-700 whitespace-nowrap">Item Category</label>
-                    <select
-                        value={selectedSaleCategoryId}
-                        onChange={(e) => setSelectedSaleCategoryId(e.target.value)}
-                        className="px-3 py-2 border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none text-sm min-w-[160px]"
-                    >
-                        <option value="">— Select category —</option>
-                        {saleCategories.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                    </select>
-                    {selectedSaleCategoryId && (
-                        <button onClick={() => setSelectedSaleCategoryId('')} className="text-xs text-slate-400 hover:text-slate-600">
-                            ✕ Clear
-                        </button>
-                    )}
-                </div>
-            )}
+            {/* Context bar: Item Category + Customer Credit Info */}
+            {(() => {
+                const creditLimit = parseFloat(selectedCustomer?.credit_limit) || 0;
+                const outstanding = parseFloat(selectedCustomer?.outstanding_balance) || 0;
+                const remaining = creditLimit - outstanding;
+                const isBlocked = selectedCustomer?.credit_blocked;
+                const usedPct = creditLimit > 0 ? (outstanding / creditLimit) * 100 : 0;
+                const hasCreditFacility = selectedCustomer && creditLimit > 0;
+                const showBar = saleCategories.length > 0 || hasCreditFacility;
+                const fmt = (v) => window.formatCurrency(v, { minimumFractionDigits: 0 });
+
+                if (!showBar) return null;
+
+                return (
+                    <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+
+                        {/* Item Category */}
+                        {saleCategories.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Category</label>
+                                <select
+                                    value={selectedSaleCategoryId}
+                                    onChange={(e) => setSelectedSaleCategoryId(e.target.value)}
+                                    className="px-3 py-1.5 border border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none text-sm bg-white"
+                                >
+                                    <option value="">— Select —</option>
+                                    {saleCategories.map(cat => (
+                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                    ))}
+                                </select>
+                                {selectedSaleCategoryId && (
+                                    <button
+                                        onClick={() => setSelectedSaleCategoryId('')}
+                                        className="text-slate-400 hover:text-red-500 transition text-xs leading-none"
+                                        title="Clear category"
+                                    >✕</button>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Divider between sections */}
+                        {saleCategories.length > 0 && hasCreditFacility && (
+                            <div className="hidden sm:block w-px h-7 bg-slate-300" />
+                        )}
+
+                        {/* Credit Facility Info */}
+                        {hasCreditFacility && (
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-1.5">
+                                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                    </svg>
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Credit</span>
+                                </div>
+
+                                {isBlocked ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" /></svg>
+                                        Blocked
+                                    </span>
+                                ) : (
+                                    <>
+                                        <div className="text-center">
+                                            <p className="text-xs text-slate-400 leading-none mb-0.5">Limit</p>
+                                            <p className="text-sm font-semibold text-slate-700">{fmt(creditLimit)}</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-xs text-slate-400 leading-none mb-0.5">Used</p>
+                                            <p className="text-sm font-semibold text-amber-600">{fmt(outstanding)}</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-xs text-slate-400 leading-none mb-0.5">Remaining</p>
+                                            <p className={`text-sm font-bold ${remaining <= 0 ? 'text-red-600' : usedPct >= 80 ? 'text-amber-600' : 'text-green-600'}`}>
+                                                {fmt(Math.max(0, remaining))}
+                                            </p>
+                                        </div>
+                                        {/* Mini usage bar */}
+                                        <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden" title={`${usedPct.toFixed(0)}% used`}>
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-300 ${usedPct >= 100 ? 'bg-red-500' : usedPct >= 80 ? 'bg-amber-500' : 'bg-green-500'}`}
+                                                style={{ width: `${Math.min(usedPct, 100)}%` }}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Products Grid */}
