@@ -278,7 +278,7 @@ class CreditAnalyticsController extends Controller
                 $payment = \App\Models\Payment::create([
                     'payment_reference' => $paymentRef . '-' . $order->id,
                     'payment_date' => now(),
-                    'payment_type' => 'customer_credit_payment',
+                    'payment_type' => 'receivable',
                     'payable_type' => 'App\\Models\\SalesOrder',
                     'payable_id' => $order->id,
                     'customer_id' => $customer->id,
