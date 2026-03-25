@@ -31,9 +31,10 @@ class CreditAnalysisService
             ->get();
 
         // Get payments made against credit sales (only for those without tracking)
+        $creditSalesOrderIds = $creditSalesOrders->pluck('id')->toArray();
         $salesPayments = Payment::where('customer_id', $customer->id)
-            ->whereNotNull('sales_order_id')
-            ->whereIn('sales_order_id', $creditSalesOrders->pluck('id'))
+            ->where('payable_type', 'App\\Models\\SalesOrder')
+            ->whereIn('payable_id', $creditSalesOrderIds)
             ->get();
 
         // Combined transaction counts
@@ -47,7 +48,7 @@ class CreditAnalysisService
 
         // For sales orders, check if paid within terms
         foreach ($creditSalesOrders as $order) {
-            $orderPayments = $salesPayments->where('sales_order_id', $order->id);
+            $orderPayments = $salesPayments->where('payable_id', $order->id);
             if ($orderPayments->count() > 0) {
                 $firstPayment = $orderPayments->sortBy('payment_date')->first();
                 $paymentTermsDays = $customer->payment_terms_days ?: 30;
@@ -77,7 +78,7 @@ class CreditAnalysisService
         
         // From sales orders
         foreach ($creditSalesOrders->where('payment_status', 'paid') as $order) {
-            $orderPayments = $salesPayments->where('sales_order_id', $order->id);
+            $orderPayments = $salesPayments->where('payable_id', $order->id);
             if ($orderPayments->count() > 0) {
                 $lastPayment = $orderPayments->sortByDesc('payment_date')->first();
                 $totalDays += $order->created_at->diffInDays($lastPayment->payment_date);
@@ -102,7 +103,7 @@ class CreditAnalysisService
             $dueDate = $order->created_at->addDays($paymentTermsDays);
             if (now() > $dueDate) {
                 $currentOverdueCount++;
-                $paidAmount = $salesPayments->where('sales_order_id', $order->id)->sum('amount');
+                $paidAmount = $salesPayments->where('payable_id', $order->id)->sum('amount');
                 $currentOverdueAmount += ($order->total_amount - $paidAmount);
                 $daysOverdue = now()->diffInDays($dueDate);
                 if ($daysOverdue > $longestOverdueDays) {
