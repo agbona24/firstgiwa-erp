@@ -899,206 +899,225 @@ export default function POSTerminal() {
 
     return (
         <div>
-            <div className="mb-6 flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900">POS Terminal</h1>
-                    <p className="text-slate-600 mt-2">Point of Sale - Quick checkout interface</p>
-                    <p className="text-xs text-slate-500 mt-1">F1: Complete Sale | F2: Clear Cart | F3: Search | F4: Save Ticket</p>
-                </div>
-                <div className="flex items-center gap-4">
-                    {/* Session Info Badge */}
-                    <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
-                        <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <div>
-                                <p className="text-xs text-green-600 font-medium">{session.session_number}</p>
-                                <p className="text-xs text-green-500">
+            {/* ── POS Header ─────────────────────────────────── */}
+            <div className="mb-4">
+
+                {/* Row 1: Title + session + actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+
+                    {/* Left: title + hotkeys */}
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 leading-tight">POS Terminal</h1>
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                            {['F1: Complete Sale','F2: Clear Cart','F3: Search','F4: Save Ticket'].map((hint, i, arr) => (
+                                <span key={hint} className="flex items-center gap-1">
+                                    <span className="text-xs text-slate-400">{hint}</span>
+                                    {i < arr.length - 1 && <span className="text-slate-300 text-xs select-none">|</span>}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Right: session badge + pending tickets */}
+                    <div className="flex items-center gap-2 flex-wrap">
+
+                        {/* Session badge */}
+                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+                            <div className="leading-none">
+                                <p className="text-xs font-semibold text-green-700">{session.session_number}</p>
+                                <p className="text-xs text-green-500 mt-0.5">
                                     Since {new Date(session.opened_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </p>
                             </div>
                             <button
                                 onClick={() => setShowCloseRegisterModal(true)}
-                                className="ml-2 p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded transition"
+                                className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-100 rounded transition ml-1"
                                 title="Close Register"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                         d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                 </svg>
                             </button>
                         </div>
-                    </div>
 
-                    <button
-                        onClick={() => setShowPendingTickets(true)}
-                        className="relative px-4 py-2 bg-amber-50 border-2 border-amber-300 rounded-lg text-amber-800 font-medium text-sm hover:bg-amber-100 transition"
-                    >
-                        <svg className="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        Pending Tickets
-                        {pendingTickets.length > 0 && (
-                            <span className="absolute -top-2 -right-2 w-5 h-5 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                                {pendingTickets.length}
-                            </span>
-                        )}
-                    </button>
-                    <div className="text-right relative">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Customer</label>
-                    <div className="relative min-w-[300px]">
-                        <input
-                            type="text"
-                            value={showCustomerDropdown ? customerSearch : (selectedCustomer?.name || 'Select Customer')}
-                            onChange={(e) => setCustomerSearch(e.target.value)}
-                            onFocus={() => {
-                                setShowCustomerDropdown(true);
-                                setCustomerSearch('');
-                            }}
-                            placeholder="Search customer..."
-                            className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none"
-                        />
-                        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        {showCustomerDropdown && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setShowCustomerDropdown(false)} />
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-slate-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
-                                    {customers
-                                        .filter(c => {
-                                            if (!customerSearch) return true;
-                                            const search = customerSearch.toLowerCase();
-                                            return c.name?.toLowerCase().includes(search) || 
-                                                   c.phone?.toLowerCase().includes(search) ||
-                                                   c.email?.toLowerCase().includes(search);
-                                        })
-                                        .map(customer => (
-                                            <button
-                                                key={customer.id ?? 'walk-in'}
-                                                onClick={() => {
-                                                    setSelectedCustomer(customer);
-                                                    setShowCustomerDropdown(false);
-                                                    setCustomerSearch('');
-                                                }}
-                                                className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition flex justify-between items-center ${
-                                                    selectedCustomer?.id === customer.id ? 'bg-blue-50' : ''
-                                                }`}
-                                            >
-                                                <div>
-                                                    <div className="font-medium text-slate-900">{customer.name}</div>
-                                                    {customer.phone && <div className="text-sm text-slate-500">{customer.phone}</div>}
-                                                </div>
-                                                {customer.customer_type === 'walk-in' && (
-                                                    <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">Cash Booking</span>
-                                                )}
-                                            </button>
-                                        ))}
-                                    {customers.filter(c => {
-                                        if (!customerSearch) return true;
-                                        const search = customerSearch.toLowerCase();
-                                        return c.name?.toLowerCase().includes(search) || 
-                                               c.phone?.toLowerCase().includes(search);
-                                    }).length === 0 && (
-                                        <div className="px-4 py-3 text-slate-500 text-sm">No customers found</div>
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </div>
+                        {/* Pending Tickets */}
+                        <button
+                            onClick={() => setShowPendingTickets(true)}
+                            className="relative flex items-center gap-2 px-4 py-2 bg-amber-50 border-2 border-amber-300 rounded-lg text-amber-800 font-medium text-sm hover:bg-amber-100 transition"
+                        >
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span>Pending Tickets</span>
+                            {pendingTickets.length > 0 && (
+                                <span className="absolute -top-2 -right-2 w-5 h-5 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                                    {pendingTickets.length}
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
-            </div>
 
-            {/* Context bar: Item Category + Customer Credit Info */}
-            {(() => {
-                const creditLimit = parseFloat(selectedCustomer?.credit_limit) || 0;
-                const outstanding = parseFloat(selectedCustomer?.outstanding_balance) || 0;
-                const remaining = creditLimit - outstanding;
-                const isBlocked = selectedCustomer?.credit_blocked;
-                const usedPct = creditLimit > 0 ? (outstanding / creditLimit) * 100 : 0;
-                const hasCreditFacility = selectedCustomer && creditLimit > 0;
-                const showBar = saleCategories.length > 0 || hasCreditFacility;
-                const fmt = (v) => window.formatCurrency(v, { minimumFractionDigits: 0 });
+                {/* Row 2: unified customer + context card */}
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-visible">
 
-                if (!showBar) return null;
-
-                return (
-                    <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
-
-                        {/* Item Category */}
-                        {saleCategories.length > 0 && (
-                            <div className="flex items-center gap-2">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Category</label>
-                                <select
-                                    value={selectedSaleCategoryId}
-                                    onChange={(e) => setSelectedSaleCategoryId(e.target.value)}
-                                    className="px-3 py-1.5 border border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none text-sm bg-white"
-                                >
-                                    <option value="">— Select —</option>
-                                    {saleCategories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                    ))}
-                                </select>
-                                {selectedSaleCategoryId && (
-                                    <button
-                                        onClick={() => setSelectedSaleCategoryId('')}
-                                        className="text-slate-400 hover:text-red-500 transition text-xs leading-none"
-                                        title="Clear category"
-                                    >✕</button>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Divider between sections */}
-                        {saleCategories.length > 0 && hasCreditFacility && (
-                            <div className="hidden sm:block w-px h-7 bg-slate-300" />
-                        )}
-
-                        {/* Credit Facility Info */}
-                        {hasCreditFacility && (
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <div className="flex items-center gap-1.5">
-                                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                    </svg>
-                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Credit</span>
-                                </div>
-
-                                {isBlocked ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
-                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" /></svg>
-                                        Blocked
-                                    </span>
-                                ) : (
-                                    <>
-                                        <div className="text-center">
-                                            <p className="text-xs text-slate-400 leading-none mb-0.5">Limit</p>
-                                            <p className="text-sm font-semibold text-slate-700">{fmt(creditLimit)}</p>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-xs text-slate-400 leading-none mb-0.5">Used</p>
-                                            <p className="text-sm font-semibold text-amber-600">{fmt(outstanding)}</p>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-xs text-slate-400 leading-none mb-0.5">Remaining</p>
-                                            <p className={`text-sm font-bold ${remaining <= 0 ? 'text-red-600' : usedPct >= 80 ? 'text-amber-600' : 'text-green-600'}`}>
-                                                {fmt(Math.max(0, remaining))}
-                                            </p>
-                                        </div>
-                                        {/* Mini usage bar */}
-                                        <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden" title={`${usedPct.toFixed(0)}% used`}>
-                                            <div
-                                                className={`h-full rounded-full transition-all duration-300 ${usedPct >= 100 ? 'bg-red-500' : usedPct >= 80 ? 'bg-amber-500' : 'bg-green-500'}`}
-                                                style={{ width: `${Math.min(usedPct, 100)}%` }}
-                                            />
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
+                    {/* Customer search */}
+                    <div className="px-4 pt-3 pb-3 relative">
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Customer</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={showCustomerDropdown ? customerSearch : (selectedCustomer?.name || '')}
+                                onChange={(e) => setCustomerSearch(e.target.value)}
+                                onFocus={() => { setShowCustomerDropdown(true); setCustomerSearch(''); }}
+                                placeholder="Search by name, phone or email…"
+                                className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-base font-semibold text-slate-900 placeholder:font-normal placeholder-slate-400 transition"
+                            />
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            {selectedCustomer && !showCustomerDropdown && (
+                                <button
+                                    onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 hover:bg-red-100 text-slate-500 hover:text-red-500 transition text-xs"
+                                    title="Clear customer"
+                                >✕</button>
+                            )}
+                            {showCustomerDropdown && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setShowCustomerDropdown(false)} />
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-slate-200 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto">
+                                        {customers
+                                            .filter(c => {
+                                                if (!customerSearch) return true;
+                                                const s = customerSearch.toLowerCase();
+                                                return c.name?.toLowerCase().includes(s) ||
+                                                       c.phone?.toLowerCase().includes(s) ||
+                                                       c.email?.toLowerCase().includes(s);
+                                            })
+                                            .map(customer => (
+                                                <button
+                                                    key={customer.id ?? 'walk-in'}
+                                                    onClick={() => { setSelectedCustomer(customer); setShowCustomerDropdown(false); setCustomerSearch(''); }}
+                                                    className={`w-full px-4 py-3 text-left hover:bg-blue-50 transition flex justify-between items-center gap-3 ${selectedCustomer?.id === customer.id ? 'bg-blue-50' : ''}`}
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-slate-900 text-base">{customer.name}</div>
+                                                        {customer.phone && <div className="text-sm font-medium text-slate-500">{customer.phone}</div>}
+                                                    </div>
+                                                    {customer.customer_type === 'walk-in'
+                                                        ? <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex-shrink-0">Cash</span>
+                                                        : customer.credit_limit > 0
+                                                            ? <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full flex-shrink-0">Credit</span>
+                                                            : null
+                                                    }
+                                                </button>
+                                            ))}
+                                        {customers.filter(c => {
+                                            if (!customerSearch) return true;
+                                            const s = customerSearch.toLowerCase();
+                                            return c.name?.toLowerCase().includes(s) || c.phone?.toLowerCase().includes(s);
+                                        }).length === 0 && (
+                                            <div className="px-4 py-3 text-slate-400 text-sm">No customers found</div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
-                );
-            })()}
+
+                    {/* Context strip: Category + Credit — only when there's something to show */}
+                    {(() => {
+                        const creditLimit = parseFloat(selectedCustomer?.credit_limit) || 0;
+                        const outstanding = parseFloat(selectedCustomer?.outstanding_balance) || 0;
+                        const remaining = creditLimit - outstanding;
+                        const isBlocked = selectedCustomer?.credit_blocked;
+                        const usedPct = creditLimit > 0 ? (outstanding / creditLimit) * 100 : 0;
+                        const hasCreditFacility = selectedCustomer && creditLimit > 0;
+                        const showStrip = saleCategories.length > 0 || hasCreditFacility;
+                        const fmt = (v) => window.formatCurrency(v, { minimumFractionDigits: 0 });
+
+                        if (!showStrip) return null;
+
+                        return (
+                            <div className="border-t border-slate-100 bg-slate-50 rounded-b-xl px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+
+                                {/* Sale Category */}
+                                {saleCategories.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Category</span>
+                                        <select
+                                            value={selectedSaleCategoryId}
+                                            onChange={(e) => setSelectedSaleCategoryId(e.target.value)}
+                                            className="px-2.5 py-1 border border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm bg-white text-slate-800"
+                                        >
+                                            <option value="">— Select —</option>
+                                            {saleCategories.map(cat => (
+                                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                            ))}
+                                        </select>
+                                        {selectedSaleCategoryId && (
+                                            <button onClick={() => setSelectedSaleCategoryId('')} className="text-slate-300 hover:text-red-400 transition text-xs" title="Clear">✕</button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Divider */}
+                                {saleCategories.length > 0 && hasCreditFacility && (
+                                    <div className="w-px h-6 bg-slate-200 hidden sm:block" />
+                                )}
+
+                                {/* Credit Facility */}
+                                {hasCreditFacility && (
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <div className="flex items-center gap-1.5 text-slate-400">
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                            </svg>
+                                            <span className="text-xs font-semibold uppercase tracking-wide">Credit</span>
+                                        </div>
+
+                                        {isBlocked ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                                                </svg>
+                                                Blocked
+                                            </span>
+                                        ) : (
+                                            <>
+                                                <div>
+                                                    <p className="text-xs text-slate-400 leading-none">Limit</p>
+                                                    <p className="text-sm font-semibold text-slate-700 leading-tight">{fmt(creditLimit)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-400 leading-none">Used</p>
+                                                    <p className="text-sm font-semibold text-amber-500 leading-tight">{fmt(outstanding)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-400 leading-none">Remaining</p>
+                                                    <p className={`text-sm font-bold leading-tight ${remaining <= 0 ? 'text-red-600' : usedPct >= 80 ? 'text-amber-600' : 'text-green-600'}`}>
+                                                        {fmt(Math.max(0, remaining))}
+                                                    </p>
+                                                </div>
+                                                <div className="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden" title={`${usedPct.toFixed(0)}% used`}>
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${usedPct >= 100 ? 'bg-red-500' : usedPct >= 80 ? 'bg-amber-500' : 'bg-green-500'}`}
+                                                        style={{ width: `${Math.min(usedPct, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-slate-400">{usedPct.toFixed(0)}%</span>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Products Grid */}
