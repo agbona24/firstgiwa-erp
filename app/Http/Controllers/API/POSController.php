@@ -372,7 +372,7 @@ class POSController extends Controller
                         'reference_number' => $smRef,
                         'product_id'       => $item['product_id'],
                         'warehouse_id'     => $inventory->warehouse_id,
-                        'movement_type'    => 'sale',
+                        'movement_type'    => 'sale_out',
                         'quantity'         => -$item['quantity'],
                         'quantity_before'  => $previousQty,
                         'quantity_after'   => $inventory->quantity,
