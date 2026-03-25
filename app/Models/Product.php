@@ -21,7 +21,6 @@ class Product extends Model
 
     protected $fillable = [
         'tenant_id',
-        'branch_id',
         'sku',
         'name',
         'description',

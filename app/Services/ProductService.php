@@ -90,12 +90,11 @@ class ProductService extends BaseService
             $warehouseId = $data['warehouse_id'] ?? null;
             unset($data['warehouse_id']);
 
-            // Stamp tenant_id / branch_id from the authenticated user so the
-            // product is discoverable by POS and other tenant-scoped queries.
+            // Stamp tenant_id from the authenticated user so the product is
+            // discoverable by POS and other tenant-scoped queries.
             $user = $this->user();
             if ($user) {
                 $data['tenant_id'] = $data['tenant_id'] ?? $user->tenant_id;
-                $data['branch_id']  = $data['branch_id']  ?? $user->branch_id;
             }
 
             $product = Product::create($data);
