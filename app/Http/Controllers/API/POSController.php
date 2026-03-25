@@ -359,20 +359,27 @@ class POSController extends Controller
                     $inventory->quantity -= $item['quantity'];
                     $inventory->save();
 
-                    // Record inventory transaction
+                    // Record stock movement
+                    $year = date('Y');
+                    $lastRef = DB::table('stock_movements')
+                        ->where('reference_number', 'like', "SM-{$year}-%")
+                        ->orderByDesc('reference_number')
+                        ->value('reference_number');
+                    $nextNum = $lastRef ? ((int) substr($lastRef, -5)) + 1 : 1;
+                    $smRef = sprintf('SM-%s-%05d', $year, $nextNum);
+
                     StockMovement::create([
-                        'tenant_id' => $tenantId,
-                        'inventory_id' => $inventory->id,
-                        'product_id' => $item['product_id'],
-                        'warehouse_id' => $inventory->warehouse_id,
-                        'transaction_type' => 'sale',
-                        'quantity' => -$item['quantity'],
-                        'previous_quantity' => $previousQty,
-                        'new_quantity' => $inventory->quantity,
-                        'reference_type' => 'sales_order',
-                        'reference_id' => $salesOrder->id,
-                        'notes' => "POS Sale: {$orderNumber}",
-                        'created_by' => $user->id,
+                        'reference_number' => $smRef,
+                        'product_id'       => $item['product_id'],
+                        'warehouse_id'     => $inventory->warehouse_id,
+                        'movement_type'    => 'sale',
+                        'quantity'         => -$item['quantity'],
+                        'quantity_before'  => $previousQty,
+                        'quantity_after'   => $inventory->quantity,
+                        'reference_type'   => 'sales_order',
+                        'reference_id'     => $salesOrder->id,
+                        'notes'            => "POS Sale: {$orderNumber}",
+                        'created_by'       => $user->id,
                     ]);
                 }
             }
