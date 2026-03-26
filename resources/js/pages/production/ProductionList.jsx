@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Button from '../../components/ui/Button';
 import { Card, CardBody } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -88,8 +88,10 @@ export default function ProductionList() {
         };
     }, [runs]);
 
+    const navigate = useNavigate();
+
     const handleCreate = () => {
-        window.location.href = 'http://127.0.0.1:8000/production/create';
+        navigate('/production/create');
     };
 
     const columns = [
@@ -195,7 +197,7 @@ export default function ProductionList() {
             }
         }, variant: 'warning', show: (row) => row.status === 'in_progress' },
         { label: 'Edit', onClick: (row) => {
-            window.location.href = `/production/edit/${row.id}`;
+            navigate(`/production/edit/${row.id}`);
         }, variant: 'outline', show: (row) => row.status === 'planned' },
         { label: 'Cancel', onClick: async (row) => {
             if (!confirm('Are you sure you want to cancel this production run?')) return;
