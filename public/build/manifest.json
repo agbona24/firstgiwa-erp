@@ -1,13 +1,21 @@
 {
-  "_AdminThemeContext-hnd2j174.js": {
-    "file": "assets/AdminThemeContext-hnd2j174.js",
+  "_AdminThemeContext-DR1JfqEi.js": {
+    "file": "assets/AdminThemeContext-DR1JfqEi.js",
     "name": "AdminThemeContext",
     "imports": [
       "resources/js/index.jsx"
     ]
   },
+  "_qz-tray-BsMik1IC.js": {
+    "file": "assets/qz-tray-BsMik1IC.js",
+    "name": "qz-tray",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/index.jsx"
+    ]
+  },
   "resources/css/app.css": {
-    "file": "assets/app-DqBUE8E4.css",
+    "file": "assets/app-D9TWar7m.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -16,24 +24,25 @@
     ]
   },
   "resources/js/components/admin/SuperAdminLayout.jsx": {
-    "file": "assets/SuperAdminLayout-8WQB18o8.js",
+    "file": "assets/SuperAdminLayout-BrSNrNfM.js",
     "name": "SuperAdminLayout",
     "src": "resources/js/components/admin/SuperAdminLayout.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/index.jsx": {
-    "file": "assets/index-ykhaQKds.js",
+    "file": "assets/index-DRo-KQzD.js",
     "name": "index",
     "src": "resources/js/index.jsx",
     "isEntry": true,
     "dynamicImports": [
+      "_qz-tray-BsMik1IC.js",
       "resources/js/pages/landing/LandingPage.jsx",
       "resources/js/components/admin/SuperAdminLayout.jsx",
       "resources/js/pages/admin/AdminDashboard.jsx",
@@ -48,154 +57,154 @@
       "resources/js/pages/admin/LandingPageEditor.jsx"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/ActivityLogs.jsx": {
-    "file": "assets/ActivityLogs-DPuvs4MH.js",
+    "file": "assets/ActivityLogs-DjGGyCZO.js",
     "name": "ActivityLogs",
     "src": "resources/js/pages/admin/ActivityLogs.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/AdminDashboard.jsx": {
-    "file": "assets/AdminDashboard-C08rqIpX.js",
+    "file": "assets/AdminDashboard-ZBNTSeos.js",
     "name": "AdminDashboard",
     "src": "resources/js/pages/admin/AdminDashboard.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/AdminUserList.jsx": {
-    "file": "assets/AdminUserList-D2wLJkTI.js",
+    "file": "assets/AdminUserList-coMcxE-_.js",
     "name": "AdminUserList",
     "src": "resources/js/pages/admin/AdminUserList.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/LandingPageEditor.jsx": {
-    "file": "assets/LandingPageEditor-D2gRL-OV.js",
+    "file": "assets/LandingPageEditor-DF3Od4Gb.js",
     "name": "LandingPageEditor",
     "src": "resources/js/pages/admin/LandingPageEditor.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/PlanForm.jsx": {
-    "file": "assets/PlanForm-DdDeIkUu.js",
+    "file": "assets/PlanForm-DexYUqt3.js",
     "name": "PlanForm",
     "src": "resources/js/pages/admin/PlanForm.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/PlanList.jsx": {
-    "file": "assets/PlanList-B39UUcid.js",
+    "file": "assets/PlanList-l7Y4fDvv.js",
     "name": "PlanList",
     "src": "resources/js/pages/admin/PlanList.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/SystemHealth.jsx": {
-    "file": "assets/SystemHealth-BluQy54l.js",
+    "file": "assets/SystemHealth-DAWKP2qh.js",
     "name": "SystemHealth",
     "src": "resources/js/pages/admin/SystemHealth.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/TenantCreate.jsx": {
-    "file": "assets/TenantCreate-TbLcDZOf.js",
+    "file": "assets/TenantCreate-Cev95Rj2.js",
     "name": "TenantCreate",
     "src": "resources/js/pages/admin/TenantCreate.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/TenantDetail.jsx": {
-    "file": "assets/TenantDetail-BZBa6v17.js",
+    "file": "assets/TenantDetail-DFkI05jf.js",
     "name": "TenantDetail",
     "src": "resources/js/pages/admin/TenantDetail.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "dynamicImports": [
       "resources/js/services/adminAPI.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/admin/TenantList.jsx": {
-    "file": "assets/TenantList-CQurczkM.js",
+    "file": "assets/TenantList-ITsIybKH.js",
     "name": "TenantList",
     "src": "resources/js/pages/admin/TenantList.jsx",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/index.jsx",
       "resources/js/services/adminAPI.js",
-      "_AdminThemeContext-hnd2j174.js"
+      "_AdminThemeContext-DR1JfqEi.js"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/pages/landing/LandingPage.jsx": {
-    "file": "assets/LandingPage-Z2yavPX3.js",
+    "file": "assets/LandingPage-CKKuD4P9.js",
     "name": "LandingPage",
     "src": "resources/js/pages/landing/LandingPage.jsx",
     "isDynamicEntry": true,
@@ -203,11 +212,11 @@
       "resources/js/index.jsx"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   },
   "resources/js/services/adminAPI.js": {
-    "file": "assets/adminAPI-D7cIuA63.js",
+    "file": "assets/adminAPI-BjUBLZ58.js",
     "name": "adminAPI",
     "src": "resources/js/services/adminAPI.js",
     "isDynamicEntry": true,
@@ -215,7 +224,7 @@
       "resources/js/index.jsx"
     ],
     "css": [
-      "assets/app-DqBUE8E4.css"
+      "assets/app-D9TWar7m.css"
     ]
   }
 }

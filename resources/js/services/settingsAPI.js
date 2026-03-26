@@ -109,6 +109,15 @@ export const printSettingsAPI = {
     update: (data) => api.put('/settings/print', data),
 };
 
+// Printers
+export const printersAPI = {
+    list: () => api.get('/settings/printers'),
+    create: (data) => api.post('/settings/printers', data),
+    update: (id, data) => api.put(`/settings/printers/${id}`, data),
+    delete: (id) => api.delete(`/settings/printers/${id}`),
+    test: (id) => api.post(`/settings/printers/${id}/test`),
+};
+
 // Document Templates
 export const templatesAPI = {
     get: () => api.get('/settings/templates'),
@@ -191,6 +200,7 @@ export default {
     sms: smsSettingsAPI,
     email: emailSettingsAPI,
     print: printSettingsAPI,
+    printers: printersAPI,
     templates: templatesAPI,
     credit: creditSettingsAPI,
     saleCharges: saleChargesAPI,

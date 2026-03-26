@@ -37,6 +37,7 @@ use App\Http\Controllers\API\Settings\NotificationSettingsController;
 use App\Http\Controllers\API\Settings\SmsSettingsController;
 use App\Http\Controllers\API\Settings\EmailSettingsController;
 use App\Http\Controllers\API\Settings\PrintSettingsController;
+use App\Http\Controllers\API\Settings\PrinterController;
 use App\Http\Controllers\API\Settings\CreditSettingsController;
 use App\Http\Controllers\API\Settings\CreditFacilityTypeController;
 use App\Http\Controllers\API\Settings\BackupController;
@@ -483,6 +484,13 @@ Route::prefix('v1')->group(function () {
             // Print & Receipt Settings
             Route::get('/print', [PrintSettingsController::class, 'index']);
             Route::put('/print', [PrintSettingsController::class, 'update']);
+
+            // Printers
+            Route::get('/printers', [PrinterController::class, 'index']);
+            Route::post('/printers', [PrinterController::class, 'store']);
+            Route::put('/printers/{printer}', [PrinterController::class, 'update']);
+            Route::delete('/printers/{printer}', [PrinterController::class, 'destroy']);
+            Route::post('/printers/{printer}/test', [PrinterController::class, 'test']);
 
             // Document Templates
             Route::get('/templates', [DocumentTemplateController::class, 'index']);

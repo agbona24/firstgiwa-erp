@@ -9,7 +9,7 @@ import settingsAPI, {
     companyAPI, branchesAPI, inventorySettingsAPI, salesSettingsAPI,
     taxesAPI, paymentMethodsAPI, bankAccountsAPI, sequencesAPI,
     approvalsAPI, payrollSettingsAPI, fiscalYearAPI, notificationSettingsAPI,
-    smsSettingsAPI, emailSettingsAPI, printSettingsAPI, creditSettingsAPI, 
+    smsSettingsAPI, emailSettingsAPI, printSettingsAPI, printersAPI, creditSettingsAPI, 
     creditFacilityTypesAPI, backupAPI, templatesAPI, apiSettingsAPI,
     saleChargesAPI, saleCategoriesAPI
 } from '../../services/settingsAPI';
@@ -18,6 +18,7 @@ import warehouseAPI from '../../services/warehouseAPI';
 import { formatCurrency, getCurrencySymbol } from '../../utils/currency';
 import userAPI from '../../services/userAPI';
 import { resetSetup } from '../../services/setupAPI';
+import qzTray from '../../services/qzTray';
 
 const fmt = (n) => formatCurrency(n, { minimumFractionDigits: 2 });
 
@@ -327,14 +328,44 @@ export default function Settings() {
     // Print & Receipts
     const [print, setPrint] = useState({
         receipt_paper_size: '80mm',
-        auto_print_pos: true,
-        show_logo_on_receipt: true,
-        show_company_address: true,
-        receipt_footer: 'Thank you for your patronage!',
+        auto_print_pos: false,
+        copies_receipt: 1,
         copies_invoice: 2,
         copies_delivery: 3,
-        copies_receipt: 1,
+        receipt_header: '',
+        receipt_footer: 'Thank you for your patronage!',
+        show_logo: true,
+        show_company_name: true,
+        show_company_address: true,
+        show_company_phone: true,
+        show_company_email: false,
+        show_date_time: true,
+        show_cashier_name: true,
+        show_item_sku: false,
+        show_item_description: true,
+        show_quantity: true,
+        show_unit_price: true,
+        show_subtotal: true,
+        show_tax: true,
+        show_discount: true,
+        show_payment_method: true,
+        show_change_given: true,
+        show_barcode: false,
+        invoice_paper_size: 'A4',
+        show_bank_details_on_invoice: true,
+        show_terms_on_invoice: true,
+        invoice_terms_text: 'Goods sold are not returnable.',
     });
+    const [printers, setPrinters] = useState([]);
+    const [showAddPrinter, setShowAddPrinter] = useState(false);
+    const [editingPrinterId, setEditingPrinterId] = useState(null);
+    const [printerForm, setPrinterForm] = useState({
+        name: '', type: 'thermal', connection_type: 'browser',
+        network_ip: '', network_port: 9100, usb_path: '', is_default: false,
+    });
+    const [testingPrinterId, setTestingPrinterId] = useState(null);
+    const [qzStatus, setQzStatus] = useState('idle'); // 'idle' | 'detecting' | 'connected' | 'unavailable'
+    const [retryingQz, setRetryingQz] = useState(false);
 
     // Document Templates
     const [templates, setTemplates] = useState([]);
@@ -782,6 +813,119 @@ export default function Settings() {
         }
     };
 
+    const handleSavePrinter = async () => {
+        if (!printerForm.name.trim()) {
+            toast.error('Printer name is required');
+            return;
+        }
+        setSaving(true);
+        try {
+            if (editingPrinterId) {
+                const res = await printersAPI.update(editingPrinterId, printerForm);
+                const updated = res.data?.data;
+                setPrinters(prev => prev.map(p => p.id === editingPrinterId ? (updated || { ...p, ...printerForm }) : p));
+                toast.success('Printer updated');
+            } else {
+                const res = await printersAPI.create(printerForm);
+                const created = res.data?.data;
+                if (created) setPrinters(prev => [...prev, created]);
+                toast.success('Printer added');
+            }
+            setShowAddPrinter(false);
+            setEditingPrinterId(null);
+            setPrinterForm({ name: '', type: 'thermal', connection_type: 'browser', network_ip: '', network_port: 9100, usb_path: '', is_default: false });
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Failed to save printer');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeletePrinter = async (printer) => {
+        try {
+            await printersAPI.delete(printer.id);
+            setPrinters(prev => prev.filter(p => p.id !== printer.id));
+            toast.success('Printer removed');
+        } catch (err) {
+            toast.error('Failed to delete printer');
+        }
+    };
+
+    const handleTestPrinter = async (printer) => {
+        setTestingPrinterId(printer.id);
+        try {
+            await printersAPI.test(printer.id);
+            const html = buildTestReceiptHTML(printer, print, company);
+
+            // Try QZ Tray first for silent/direct printing
+            if (qzStatus === 'connected') {
+                try {
+                    await qzTray.printHTML(printer.name, html, { copies: 1 });
+                    toast.success(`Test receipt sent to "${printer.name}" via QZ Tray`);
+                    return;
+                } catch (qzErr) {
+                    console.warn('QZ Tray print failed, falling back to browser popup:', qzErr);
+                    setQzStatus('unavailable');
+                    toast.warning('QZ Tray print failed — opening browser dialog instead');
+                }
+            }
+
+            // Browser popup fallback
+            const win = window.open('', '_blank', 'width=420,height=650');
+            if (win) {
+                win.document.write(html);
+                win.document.close();
+                win.focus();
+                setTimeout(() => win.print(), 600);
+                toast.success(`Test receipt opened for "${printer.name}" — use the print dialog`);
+            } else {
+                toast.info('Allow popups in your browser, then try again.');
+            }
+        } catch (err) {
+            toast.error(err?.response?.data?.message || 'Test print failed');
+        } finally {
+            setTestingPrinterId(null);
+        }
+    };
+
+    const buildTestReceiptHTML = (printer, printCfg, companyCfg) => {
+        const width = printCfg.receipt_paper_size === '58mm' ? '200px' : printCfg.receipt_paper_size === 'A4' ? '595px' : '280px';
+        const now = new Date().toLocaleString();
+        return `<!DOCTYPE html><html><head><title>Test Receipt</title>
+<style>
+  body { font-family: monospace; font-size: 12px; width: ${width}; margin: 0 auto; padding: 10px; }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+  .divider { border-top: 1px dashed #000; margin: 6px 0; }
+  .row { display: flex; justify-content: space-between; }
+  @media print { body { width: ${width}; } }
+</style></head><body>
+${printCfg.show_company_name ? `<div class="center bold">${companyCfg?.name || 'COMPANY NAME'}</div>` : ''}
+${printCfg.show_company_address ? `<div class="center">${companyCfg?.address || '123 Main Street'}</div>` : ''}
+${printCfg.show_company_phone ? `<div class="center">Tel: ${companyCfg?.phone || '+000 000 0000'}</div>` : ''}
+${printCfg.receipt_header ? `<div class="center" style="margin-top:4px">${printCfg.receipt_header}</div>` : ''}
+<div class="divider"></div>
+<div class="center bold">*** TEST RECEIPT ***</div>
+<div class="divider"></div>
+${printCfg.show_date_time ? `<div class="row"><span>Date:</span><span>${now}</span></div>` : ''}
+${printCfg.show_cashier_name ? `<div class="row"><span>Cashier:</span><span>Test User</span></div>` : ''}
+<div class="divider"></div>
+<div class="row"><span>${printCfg.show_item_sku ? '[SKU-001] ' : ''}Sample Item</span><span></span></div>
+${printCfg.show_quantity ? `<div class="row"><span>  Qty: 2 x 500.00</span><span>1,000.00</span></div>` : ''}
+<div class="divider"></div>
+${printCfg.show_subtotal ? `<div class="row"><span>Subtotal</span><span>1,000.00</span></div>` : ''}
+${printCfg.show_discount ? `<div class="row"><span>Discount</span><span>-0.00</span></div>` : ''}
+${printCfg.show_tax ? `<div class="row"><span>Tax (7.5%)</span><span>75.00</span></div>` : ''}
+<div class="row bold"><span>TOTAL</span><span>1,075.00</span></div>
+<div class="divider"></div>
+${printCfg.show_payment_method ? `<div class="row"><span>Payment:</span><span>Cash</span></div>` : ''}
+${printCfg.show_change_given ? `<div class="row"><span>Change:</span><span>0.00</span></div>` : ''}
+<div class="divider"></div>
+<div class="center">${printCfg.receipt_footer || 'Thank you for your patronage!'}</div>
+<div class="center" style="margin-top:6px;font-size:10px">Printer: ${printer.name} (${printer.type})</div>
+</body></html>`;
+    };
+
     const [backupHistory, setBackupHistory] = useState([]);
 
     // Fetch data based on active section
@@ -913,8 +1057,15 @@ export default function Settings() {
                     break;
                 }
                 case 'print': {
-                    const res = await printSettingsAPI.get();
-                    if (res.data?.data) setPrint(res.data.data);
+                    const [res, printersRes] = await Promise.all([
+                        printSettingsAPI.get(),
+                        printersAPI.list(),
+                    ]);
+                    if (res.data?.data) setPrint(prev => ({ ...prev, ...res.data.data }));
+                    setPrinters(printersRes.data?.data || []);
+                    // Kick off QZ Tray detection in background (don't block section load)
+                    setQzStatus('detecting');
+                    qzTray.detect().then(ok => setQzStatus(ok ? 'connected' : 'unavailable'));
                     break;
                 }
                 case 'templates': {
@@ -3450,76 +3601,395 @@ ${md
                     <div className="space-y-6">
                         <div>
                             <h3 className="text-lg font-semibold text-slate-900">Print & Receipts</h3>
-                            <p className="text-sm text-slate-500 mt-1">Configure printing preferences for receipts, invoices, and other documents</p>
+                            <p className="text-sm text-slate-500 mt-1">Configure receipt layout, content structure, and manage your printers</p>
                         </div>
 
-                        <Card><CardBody className="p-4 space-y-4">
-                            <h4 className="font-semibold text-slate-800">POS Receipt Settings</h4>
-                            <div className="grid grid-cols-2 gap-4">
+                        {/* ── QZ Tray Status Banner ── */}
+                        {qzStatus === 'detecting' && (
+                            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-sm">
+                                <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                Checking for QZ Tray…
+                            </div>
+                        )}
+
+                        {qzStatus === 'connected' && (
+                            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">
+                                <svg className="w-5 h-5 shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 <div>
-                                    <label className={labelClass}>Paper Size</label>
-                                    <select value={print.receipt_paper_size} onChange={(e) => setPrint({...print, receipt_paper_size: e.target.value})} className={inputClass}>
-                                        <option value="58mm">58mm (Small Thermal)</option>
-                                        <option value="80mm">80mm (Standard Thermal)</option>
-                                        <option value="A4">A4 (Full Page)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Copies per Receipt</label>
-                                    <input type="number" min="1" max="5" value={print.copies_receipt} onChange={(e) => setPrint({...print, copies_receipt: parseInt(e.target.value) || 1})} className={inputClass} />
+                                    <span className="font-semibold">QZ Tray connected</span> — silent/direct printing is enabled. Test Print will send directly to your printer without a dialog.
                                 </div>
                             </div>
+                        )}
+
+                        {qzStatus === 'unavailable' && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+                                <div className="flex gap-3 p-4">
+                                    <svg className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-amber-800">Direct Printing Not Available</p>
+                                        <p className="text-sm text-amber-700 mt-0.5">Install <strong>QZ Tray</strong> for silent printing. Without it, prints will open in a browser popup.</p>
+                                    </div>
+                                </div>
+                                <div className="border-t border-amber-100 px-4 py-3 bg-white/60 space-y-3">
+                                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Setup Instructions</p>
+                                    <ol className="space-y-2 text-sm text-slate-700">
+                                        <li className="flex gap-2">
+                                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">1</span>
+                                            <span>Download and install QZ Tray for your operating system.</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">2</span>
+                                            <span>Launch the application — it runs silently as a <strong>system tray icon</strong> in the bottom-right of your screen (Windows) or menu bar (macOS).</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">3</span>
+                                            <span>When prompted by your browser, <strong>allow</strong> the QZ Tray site certificate to enable the connection.</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">4</span>
+                                            <span>Click <strong>Retry Connection</strong> below once QZ Tray is running.</span>
+                                        </li>
+                                    </ol>
+                                    <div className="flex flex-wrap gap-3 pt-1">
+                                        <a
+                                            href="https://qz.io/download/"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                            Download QZ Tray
+                                        </a>
+                                        <button
+                                            onClick={async () => {
+                                                setRetryingQz(true);
+                                                setQzStatus('detecting');
+                                                const ok = await qzTray.detect();
+                                                setQzStatus(ok ? 'connected' : 'unavailable');
+                                                setRetryingQz(false);
+                                                if (!ok) toast.error('QZ Tray not found. Make sure it is running, then retry.');
+                                            }}
+                                            disabled={retryingQz}
+                                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-amber-300 hover:bg-amber-50 text-amber-800 text-sm font-medium transition-colors disabled:opacity-50"
+                                        >
+                                            {retryingQz ? (
+                                                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Connecting…</>
+                                            ) : (
+                                                <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Retry Connection</>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Two-column: settings left, live preview right */}
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+
+                                {/* ── Paper & Copies ── */}
+                                <Card><CardBody className="p-4 space-y-4">
+                                    <h4 className="font-semibold text-slate-800">Paper & Copies</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className={labelClass}>Receipt Paper Size</label>
+                                            <select value={print.receipt_paper_size} onChange={e => setPrint({...print, receipt_paper_size: e.target.value})} className={inputClass}>
+                                                <option value="58mm">58mm – Small Thermal</option>
+                                                <option value="80mm">80mm – Standard Thermal</option>
+                                                <option value="A4">A4 – Full Page</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Receipt Copies</label>
+                                            <input type="number" min="1" max="5" value={print.copies_receipt} onChange={e => setPrint({...print, copies_receipt: parseInt(e.target.value) || 1})} className={inputClass} />
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Invoice Paper Size</label>
+                                            <select value={print.invoice_paper_size} onChange={e => setPrint({...print, invoice_paper_size: e.target.value})} className={inputClass}>
+                                                <option value="A4">A4</option>
+                                                <option value="Letter">Letter</option>
+                                                <option value="A5">A5</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Invoice Copies</label>
+                                            <input type="number" min="1" max="5" value={print.copies_invoice} onChange={e => setPrint({...print, copies_invoice: parseInt(e.target.value) || 1})} className={inputClass} />
+                                            <p className="text-xs text-slate-400 mt-1">Customer + Office</p>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Delivery Note Copies</label>
+                                            <input type="number" min="1" max="5" value={print.copies_delivery} onChange={e => setPrint({...print, copies_delivery: parseInt(e.target.value) || 1})} className={inputClass} />
+                                            <p className="text-xs text-slate-400 mt-1">Customer + Driver + Office</p>
+                                        </div>
+                                        <div className="flex items-center gap-3 pt-5">
+                                            <input type="checkbox" id="auto_print_pos" checked={!!print.auto_print_pos} onChange={e => setPrint({...print, auto_print_pos: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                                            <label htmlFor="auto_print_pos" className="text-sm text-slate-700 cursor-pointer">Auto-print POS receipts</label>
+                                        </div>
+                                    </div>
+                                </CardBody></Card>
+
+                                {/* ── Header & Footer Text ── */}
+                                <Card><CardBody className="p-4 space-y-4">
+                                    <h4 className="font-semibold text-slate-800">Header & Footer Text</h4>
+                                    <div>
+                                        <label className={labelClass}>Receipt Header</label>
+                                        <textarea value={print.receipt_header} onChange={e => setPrint({...print, receipt_header: e.target.value})} className={inputClass} rows={2} placeholder="Optional tagline or welcome message..." />
+                                        <p className="text-xs text-slate-400 mt-1">Appears below your company name at the top</p>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Receipt Footer</label>
+                                        <textarea value={print.receipt_footer} onChange={e => setPrint({...print, receipt_footer: e.target.value})} className={inputClass} rows={2} placeholder="Thank you for your patronage!" />
+                                        <p className="text-xs text-slate-400 mt-1">Appears at the bottom of every receipt</p>
+                                    </div>
+                                </CardBody></Card>
+
+                                {/* ── Receipt Content Toggles ── */}
+                                <Card><CardBody className="p-4 space-y-3">
+                                    <h4 className="font-semibold text-slate-800">Receipt Content</h4>
+                                    <p className="text-xs text-slate-500">Choose which fields appear on printed receipts</p>
+                                    {[
+                                        { key: 'show_logo',            label: 'Company Logo',       desc: 'Print logo at the top' },
+                                        { key: 'show_company_name',    label: 'Company Name',       desc: 'Show business name' },
+                                        { key: 'show_company_address', label: 'Company Address',    desc: 'Full address block' },
+                                        { key: 'show_company_phone',   label: 'Phone Number',       desc: 'Business phone' },
+                                        { key: 'show_company_email',   label: 'Email Address',      desc: 'Business email' },
+                                        { key: 'show_date_time',       label: 'Date & Time',        desc: 'Transaction timestamp' },
+                                        { key: 'show_cashier_name',    label: 'Cashier Name',       desc: 'Who processed the sale' },
+                                        { key: 'show_item_sku',        label: 'Item SKU / Code',    desc: 'Product barcode / SKU' },
+                                        { key: 'show_item_description','label': 'Item Description', desc: 'Product name & details' },
+                                        { key: 'show_quantity',        label: 'Quantity',           desc: 'Units sold per line' },
+                                        { key: 'show_unit_price',      label: 'Unit Price',         desc: 'Price per item' },
+                                        { key: 'show_subtotal',        label: 'Subtotal',           desc: 'Pre-tax/discount total' },
+                                        { key: 'show_discount',        label: 'Discount',           desc: 'Applied discounts' },
+                                        { key: 'show_tax',             label: 'Tax / VAT',          desc: 'Tax amount line' },
+                                        { key: 'show_payment_method',  label: 'Payment Method',     desc: 'Cash / card / transfer' },
+                                        { key: 'show_change_given',    label: 'Change Given',       desc: 'Change returned to customer' },
+                                        { key: 'show_barcode',         label: 'Receipt Barcode',    desc: 'Scannable receipt barcode' },
+                                    ].map(({ key, label, desc }) => (
+                                        <div key={key} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                                            <div>
+                                                <div className="text-sm font-medium text-slate-700">{label}</div>
+                                                <div className="text-xs text-slate-400">{desc}</div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPrint({ ...print, [key]: !print[key] })}
+                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${print[key] ? 'bg-blue-600' : 'bg-slate-300'}`}
+                                            >
+                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${print[key] ? 'translate-x-4' : 'translate-x-1'}`} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </CardBody></Card>
+
+                                {/* ── Invoice Extras ── */}
+                                <Card><CardBody className="p-4 space-y-3">
+                                    <h4 className="font-semibold text-slate-800">Invoice Options</h4>
+                                    <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-700">Bank Details on Invoice</div>
+                                            <div className="text-xs text-slate-400">Show payment bank account info</div>
+                                        </div>
+                                        <button type="button" onClick={() => setPrint({...print, show_bank_details_on_invoice: !print.show_bank_details_on_invoice})} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${print.show_bank_details_on_invoice ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${print.show_bank_details_on_invoice ? 'translate-x-4' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-700">Terms & Conditions on Invoice</div>
+                                            <div className="text-xs text-slate-400">Print terms text on invoices</div>
+                                        </div>
+                                        <button type="button" onClick={() => setPrint({...print, show_terms_on_invoice: !print.show_terms_on_invoice})} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${print.show_terms_on_invoice ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${print.show_terms_on_invoice ? 'translate-x-4' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                    {print.show_terms_on_invoice && (
+                                        <div>
+                                            <label className={labelClass}>Terms Text</label>
+                                            <textarea value={print.invoice_terms_text} onChange={e => setPrint({...print, invoice_terms_text: e.target.value})} className={inputClass} rows={2} placeholder="Goods sold are not returnable." />
+                                        </div>
+                                    )}
+                                </CardBody></Card>
+
+                                <div className="flex gap-3 pt-2 border-t">
+                                    <Button onClick={() => handleSave('Print & Receipts')} disabled={saving}>
+                                        {saving ? 'Saving...' : 'Save Settings'}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* ── Live Receipt Preview ── */}
+                            <div className="hidden xl:block">
+                                <div className="sticky top-4">
+                                    <h4 className="font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        Live Receipt Preview
+                                    </h4>
+                                    <div className="bg-slate-100 rounded-xl p-4 flex justify-center">
+                                        <div style={{ width: print.receipt_paper_size === '58mm' ? 200 : 280, fontFamily: 'monospace', fontSize: 11, background: '#fff', padding: '12px 10px', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.15)' }}>
+                                            {print.show_logo && <div style={{ textAlign: 'center', marginBottom: 4 }}><div style={{ display: 'inline-block', width: 40, height: 40, background: '#e2e8f0', borderRadius: 4, lineHeight: '40px', textAlign: 'center', fontSize: 9, color: '#94a3b8' }}>LOGO</div></div>}
+                                            {print.show_company_name && <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 13 }}>{company?.name || 'Your Business Name'}</div>}
+                                            {print.show_company_address && <div style={{ textAlign: 'center', color: '#64748b' }}>{company?.address || '123 Business Street'}</div>}
+                                            {print.show_company_phone && <div style={{ textAlign: 'center', color: '#64748b' }}>Tel: {company?.phone || '+000 000 0000'}</div>}
+                                            {print.show_company_email && <div style={{ textAlign: 'center', color: '#64748b' }}>{company?.email || 'info@business.com'}</div>}
+                                            {print.receipt_header && <div style={{ textAlign: 'center', marginTop: 4, borderTop: '1px dashed #ccc', paddingTop: 4 }}>{print.receipt_header}</div>}
+                                            <div style={{ borderTop: '1px dashed #94a3b8', margin: '6px 0' }} />
+                                            {print.show_date_time && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Date:</span><span>{new Date().toLocaleDateString()}</span></div>}
+                                            {print.show_cashier_name && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Cashier:</span><span>John Doe</span></div>}
+                                            <div style={{ borderTop: '1px dashed #94a3b8', margin: '6px 0' }} />
+                                            {print.show_item_description && (
+                                                <div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{print.show_item_sku ? '[SKU001] ' : ''}Sample Product</span></div>
+                                                    {print.show_quantity && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}><span>  2 x 500.00</span><span>1,000.00</span></div>}
+                                                </div>
+                                            )}
+                                            <div style={{ borderTop: '1px dashed #94a3b8', margin: '6px 0' }} />
+                                            {print.show_subtotal && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>1,000.00</span></div>}
+                                            {print.show_discount && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Discount</span><span>-0.00</span></div>}
+                                            {print.show_tax && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Tax</span><span>75.00</span></div>}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}><span>TOTAL</span><span>1,075.00</span></div>
+                                            <div style={{ borderTop: '1px dashed #94a3b8', margin: '6px 0' }} />
+                                            {print.show_payment_method && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Payment</span><span>Cash</span></div>}
+                                            {print.show_change_given && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Change</span><span>0.00</span></div>}
+                                            <div style={{ borderTop: '1px dashed #94a3b8', margin: '6px 0' }} />
+                                            <div style={{ textAlign: 'center', color: '#475569' }}>{print.receipt_footer || 'Thank you for your patronage!'}</div>
+                                            {print.show_barcode && <div style={{ textAlign: 'center', marginTop: 6, background: '#000', color: '#fff', fontSize: 9, padding: '2px 4px', letterSpacing: 2 }}>||| ||| || |||| |||</div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Printers ── */}
+                        <Card><CardBody className="p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-semibold text-slate-800">Printers</h4>
+                                    <p className="text-xs text-slate-500 mt-0.5">Add and manage printers. Use "Browser" type for the system print dialog.</p>
+                                </div>
+                                <Button onClick={() => { setShowAddPrinter(true); setEditingPrinterId(null); setPrinterForm({ name: '', type: 'thermal', connection_type: 'browser', network_ip: '', network_port: 9100, usb_path: '', is_default: false }); }}>
+                                    + Add Printer
+                                </Button>
+                            </div>
+
+                            {showAddPrinter && (
+                                <div className="border-2 border-blue-200 rounded-xl p-4 space-y-4 bg-blue-50/30">
+                                    <h5 className="font-medium text-slate-700">{editingPrinterId ? 'Edit Printer' : 'New Printer'}</h5>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className={labelClass}>Printer Name *</label>
+                                            <input type="text" value={printerForm.name} onChange={e => setPrinterForm({...printerForm, name: e.target.value})} className={inputClass} placeholder="e.g. Front Counter Thermal" />
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Printer Type</label>
+                                            <select value={printerForm.type} onChange={e => setPrinterForm({...printerForm, type: e.target.value})} className={inputClass}>
+                                                <option value="thermal">Thermal (POS)</option>
+                                                <option value="inkjet">Inkjet</option>
+                                                <option value="laser">Laser</option>
+                                                <option value="pdf">PDF / Virtual</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Connection</label>
+                                            <select value={printerForm.connection_type} onChange={e => setPrinterForm({...printerForm, connection_type: e.target.value})} className={inputClass}>
+                                                <option value="browser">Browser (System Dialog)</option>
+                                                <option value="network">Network (IP)</option>
+                                                <option value="usb">USB / Local</option>
+                                            </select>
+                                        </div>
+                                        {printerForm.connection_type === 'network' && (
+                                            <>
+                                                <div>
+                                                    <label className={labelClass}>IP Address</label>
+                                                    <input type="text" value={printerForm.network_ip} onChange={e => setPrinterForm({...printerForm, network_ip: e.target.value})} className={inputClass} placeholder="192.168.1.100" />
+                                                </div>
+                                                <div>
+                                                    <label className={labelClass}>Port</label>
+                                                    <input type="number" value={printerForm.network_port} onChange={e => setPrinterForm({...printerForm, network_port: parseInt(e.target.value) || 9100})} className={inputClass} placeholder="9100" />
+                                                </div>
+                                            </>
+                                        )}
+                                        {printerForm.connection_type === 'usb' && (
+                                            <div className="col-span-2">
+                                                <label className={labelClass}>USB/Local Path</label>
+                                                <input type="text" value={printerForm.usb_path} onChange={e => setPrinterForm({...printerForm, usb_path: e.target.value})} className={inputClass} placeholder="\\\\ComputerName\\PrinterName or /dev/usb/lp0" />
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-3 pt-2">
+                                            <input type="checkbox" id="printer_default" checked={!!printerForm.is_default} onChange={e => setPrinterForm({...printerForm, is_default: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
+                                            <label htmlFor="printer_default" className="text-sm text-slate-700 cursor-pointer">Set as default printer</label>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <Button onClick={handleSavePrinter} disabled={saving}>{saving ? 'Saving...' : (editingPrinterId ? 'Update Printer' : 'Add Printer')}</Button>
+                                        <Button variant="outline" onClick={() => { setShowAddPrinter(false); setEditingPrinterId(null); }}>Cancel</Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {printers.length === 0 && !showAddPrinter && (
+                                <div className="text-center py-8 text-slate-400">
+                                    <svg className="w-10 h-10 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                    <p className="text-sm">No printers added yet. Click <strong>+ Add Printer</strong> to get started.</p>
+                                </div>
+                            )}
+
                             <div className="space-y-3">
-                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                    <div>
-                                        <div className="font-medium text-slate-700">Auto-Print POS Receipts</div>
-                                        <div className="text-xs text-slate-500">Automatically print after each POS transaction</div>
+                                {printers.map(printer => (
+                                    <div key={printer.id} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-white">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                                                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-slate-800">{printer.name}</span>
+                                                    {printer.is_default && <Badge variant="success" className="text-xs">Default</Badge>}
+                                                    {!printer.is_active && <Badge variant="danger" className="text-xs">Inactive</Badge>}
+                                                </div>
+                                                <div className="text-xs text-slate-500">
+                                                    {printer.type.charAt(0).toUpperCase() + printer.type.slice(1)} &middot; {printer.connection_type.charAt(0).toUpperCase() + printer.connection_type.slice(1)}
+                                                    {printer.connection_type === 'network' && printer.network_ip && ` · ${printer.network_ip}:${printer.network_port}`}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => handleTestPrinter(printer)}
+                                                disabled={testingPrinterId === printer.id}
+                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+                                            >
+                                                {testingPrinterId === printer.id ? (
+                                                    <>
+                                                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                                        Testing...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                        Test Print
+                                                    </>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={() => { setEditingPrinterId(printer.id); setPrinterForm({ name: printer.name, type: printer.type, connection_type: printer.connection_type, network_ip: printer.network_ip || '', network_port: printer.network_port || 9100, usb_path: printer.usb_path || '', is_default: printer.is_default }); setShowAddPrinter(true); }}
+                                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Edit"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeletePrinter(printer)}
+                                                className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Delete"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <input type="checkbox" checked={print.auto_print_pos} onChange={(e) => setPrint({...print, auto_print_pos: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                                </div>
-                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                    <div>
-                                        <div className="font-medium text-slate-700">Show Logo on Receipt</div>
-                                        <div className="text-xs text-slate-500">Print company logo at the top of receipts</div>
-                                    </div>
-                                    <input type="checkbox" checked={print.show_logo_on_receipt} onChange={(e) => setPrint({...print, show_logo_on_receipt: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                                </div>
-                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                    <div>
-                                        <div className="font-medium text-slate-700">Show Company Address</div>
-                                        <div className="text-xs text-slate-500">Print full company address on receipts</div>
-                                    </div>
-                                    <input type="checkbox" checked={print.show_company_address} onChange={(e) => setPrint({...print, show_company_address: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
-                                </div>
+                                ))}
                             </div>
                         </CardBody></Card>
-
-                        <Card><CardBody className="p-4 space-y-4">
-                            <h4 className="font-semibold text-slate-800">Document Copies</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className={labelClass}>Invoice Copies</label>
-                                    <input type="number" min="1" max="5" value={print.copies_invoice} onChange={(e) => setPrint({...print, copies_invoice: parseInt(e.target.value) || 1})} className={inputClass} />
-                                    <p className="text-xs text-slate-400 mt-1">Customer copy + Factory copy</p>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Delivery Note Copies</label>
-                                    <input type="number" min="1" max="5" value={print.copies_delivery} onChange={(e) => setPrint({...print, copies_delivery: parseInt(e.target.value) || 1})} className={inputClass} />
-                                    <p className="text-xs text-slate-400 mt-1">Customer + Driver + Office</p>
-                                </div>
-                            </div>
-                        </CardBody></Card>
-
-                        <Card><CardBody className="p-4 space-y-4">
-                            <h4 className="font-semibold text-slate-800">Receipt Footer</h4>
-                            <textarea value={print.receipt_footer} onChange={(e) => setPrint({...print, receipt_footer: e.target.value})} className={inputClass} rows={3} placeholder="Thank you for your patronage!" />
-                            <p className="text-xs text-slate-400">This text will appear at the bottom of all receipts</p>
-                        </CardBody></Card>
-
-                        <div className="flex gap-3 pt-4 border-t">
-                            <Button onClick={() => handleSave('Print & Receipts')}>Save Settings</Button>
-                            <Button variant="outline">Print Test Receipt</Button>
-                        </div>
                     </div>
                 );
 
