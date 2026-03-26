@@ -17,7 +17,10 @@ class StaffController extends Controller
     public function index(Request $request): JsonResponse
     {
         $tenantId = $request->user()->tenant_id;
-        $query = Staff::with(['user', 'branch'])->where('tenant_id', $tenantId);
+        $query = Staff::with(['user', 'branch']);
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
 
         // Search filter
         if ($request->filled('search')) {
@@ -100,8 +103,13 @@ class StaffController extends Controller
             'emergency_contact_relationship' => 'nullable|string|max:100',
         ]);
 
-        // Set tenant_id from authenticated user
-        $validated['tenant_id'] = $request->user()->tenant_id;
+        // Set tenant_id from authenticated user (fall back to request body for super-admin)
+        $validated['tenant_id'] = $request->user()->tenant_id
+            ?? $request->input('tenant_id');
+
+        if (!$validated['tenant_id']) {
+            return response()->json(['message' => 'tenant_id is required'], 422);
+        }
         
         // Generate staff number
         $validated['staff_number'] = $this->generateStaffNumber();
