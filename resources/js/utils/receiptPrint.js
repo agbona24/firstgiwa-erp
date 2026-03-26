@@ -11,7 +11,13 @@
  */
 
 import { printSettingsAPI, companyAPI } from '../services/settingsAPI';
-import qzTray from '../services/qzTray';
+// qzTray is loaded lazily so a missing/broken QZ package never prevents receipt printing
+let _qzTray = null;
+async function getQzTray() {
+    if (_qzTray) return _qzTray;
+    try { _qzTray = (await import('../services/qzTray')).default; } catch { _qzTray = null; }
+    return _qzTray;
+}
 
 // ──────────────────────────────────────────────────────────────
 // Settings cache (loaded once per page session, per open)
@@ -295,11 +301,12 @@ export async function printReceipt(receiptData, opts = {}) {
     const html = buildReceiptHTML(receiptData, settings, company);
     const copies = parseInt(settings.copies_receipt) || 1;
 
-    // Try QZ Tray silent printing
+    // Try QZ Tray silent printing (lazy-loaded so failures never block receipt printing)
     if (!opts.forcePopup && opts.printerName) {
         try {
-            if (await qzTray.detect(2000)) {
-                await qzTray.printHTML(opts.printerName, html, { copies });
+            const qz = await getQzTray();
+            if (qz && await qz.detect(2000)) {
+                await qz.printHTML(opts.printerName, html, { copies });
                 return { method: 'qz' };
             }
         } catch (e) {
