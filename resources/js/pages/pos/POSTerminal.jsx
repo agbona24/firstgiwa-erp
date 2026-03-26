@@ -9,7 +9,7 @@ import posAPI from '../../services/posAPI';
 import { taxesAPI, bankAccountsAPI, saleChargesAPI, saleCategoriesAPI } from '../../services/settingsAPI';
 import OpenRegisterModal from './OpenRegisterModal';
 import CloseRegisterModal from './CloseRegisterModal';
-import { loadPrintSettings, printReceipt as doPrintReceipt } from '../../utils/receiptPrint';
+import { loadPrintSettings, loadCompanyInfo, printReceipt as doPrintReceipt, getCompanyCache } from '../../utils/receiptPrint';
 
 export default function POSTerminal() {
     // Register Session State
@@ -58,8 +58,9 @@ export default function POSTerminal() {
     const [saleCategories, setSaleCategories] = useState([]);
     const [selectedSaleCategoryId, setSelectedSaleCategoryId] = useState('');
 
-    // Print settings (loaded once alongside POS data)
+    // Print settings + company info (loaded once alongside POS data)
     const printSettingsRef = useRef(null);
+    const companyInfoRef = useRef({});
 
     const toast = useToast();
     const confirm = useConfirm();
@@ -152,9 +153,9 @@ export default function POSTerminal() {
             const catData = saleCatRes.data?.data || [];
             setSaleCategories(Array.isArray(catData) ? catData.filter(c => c.is_active) : []);
 
-            // Print settings are preloaded into the module cache by loadPrintSettings() above
-            // (printSettingsRef kept for any component that needs a synchronous peek)
+            // Print settings + company info preloaded into module cache
             printSettingsRef.current = await loadPrintSettings();
+            companyInfoRef.current = await loadCompanyInfo();
 
             // Set default cash booking customer
             const walkIn = customersRes.data?.find(c => c.customer_type === 'walk-in');
@@ -1429,7 +1430,7 @@ export default function POSTerminal() {
                     <div className="p-6">
                         <div className="bg-white border-2 border-slate-200 rounded-lg p-6 mb-6">
                             <div className="text-center mb-4">
-                                <h2 className="text-2xl font-bold text-blue-800">FactoryPulse</h2>
+                                <h2 className="text-2xl font-bold text-blue-800">{companyInfoRef.current?.name || localStorage.getItem('company_name') || ''}</h2>
                                 <p className="text-sm text-slate-600">Sales Receipt</p>
                                 <p className="text-xs text-slate-500 mt-1">{lastReceipt.id}</p>
                             </div>
@@ -1499,7 +1500,7 @@ export default function POSTerminal() {
                                 )}
                             </div>
 
-                            <p className="text-center text-xs text-slate-500 mt-4">Thank you for your business!</p>
+                            <p className="text-center text-xs text-slate-500 mt-4">{printSettingsRef.current?.receipt_footer || 'Thank you for your business!'}</p>
                         </div>
 
                         <div className="flex gap-3">

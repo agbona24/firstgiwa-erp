@@ -573,23 +573,28 @@ export default function SalesOrderList() {
 
     const handlePrintReceipt = async (order) => {
         try {
+            // order.items is a count (number); actual line items are in order.lineItems
+            const lineItems = Array.isArray(order.lineItems) ? order.lineItems : [];
             const receiptData = {
                 id: order.so_number || order.id,
                 date: order.date || order.created_at,
-                customer: order.customer ? { name: order.customer.name, phone: order.customer.phone } : null,
-                items: (order.items || []).map(i => ({
-                    name: i.product?.name || i.name || 'Item',
-                    sku: i.product?.sku,
-                    quantity: i.quantity,
-                    price: i.unit_price ?? i.price ?? 0,
+                customer: {
+                    name: typeof order.customer === 'object' ? order.customer?.name : String(order.customer || 'Customer'),
+                    phone: order.customerPhone || order.customer?.phone || '',
+                },
+                items: lineItems.map(i => ({
+                    name: i.product || i.product_name || i.name || 'Item',
+                    sku: i.sku,
+                    quantity: i.quantity ?? 1,
+                    price: i.price ?? i.unit_price ?? 0,
                 })),
                 subtotal: order.subtotal ?? order.total,
                 discount: order.discount_amount ?? 0,
                 tax: order.tax_amount ?? 0,
                 taxName: order.tax_name,
-                charges: [],
+                charges: Array.isArray(order.charges) ? order.charges : [],
                 total: order.total,
-                paymentMethod: order.payment_method || '',
+                paymentMethod: order.paymentType || order.payment_method || '',
             };
             await doPrintReceipt(receiptData);
             toast.success('Receipt sent to printer');

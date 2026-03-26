@@ -10,7 +10,7 @@
  *   await printReceipt(receiptData);
  */
 
-import { printSettingsAPI } from '../services/settingsAPI';
+import { printSettingsAPI, companyAPI } from '../services/settingsAPI';
 import qzTray from '../services/qzTray';
 
 // ──────────────────────────────────────────────────────────────
@@ -35,17 +35,46 @@ export function setPrintSettings(s) { _settings = s; }
 /** Clear cache so next call re-fetches (useful after saving settings) */
 export function clearPrintSettingsCache() { _settings = null; }
 
+/** Synchronous read of the cached company info (populated after loadCompanyInfo()) */
+export function getCompanyCache() { return _company; }
+
 // ──────────────────────────────────────────────────────────────
-// Company info from localStorage
+// Company info — fetched from API (with session cache)
 // ──────────────────────────────────────────────────────────────
-function getCompany() {
-    return {
-        name:    localStorage.getItem('company_name')    || '',
-        address: localStorage.getItem('company_address') || '',
-        phone:   localStorage.getItem('company_phone')   || '',
-        email:   localStorage.getItem('company_email')   || '',
-        logo_url: localStorage.getItem('company_logo_url') || '',
-    };
+let _company = null;
+
+export async function loadCompanyInfo(force = false) {
+    if (_company && !force) return _company;
+    try {
+        const res = await companyAPI.get();
+        const d = res.data?.data || {};
+        _company = {
+            name:     d.name     || localStorage.getItem('company_name')     || '',
+            address:  d.address  || localStorage.getItem('company_address')  || '',
+            phone:    d.phone    || localStorage.getItem('company_phone')    || '',
+            email:    d.email    || localStorage.getItem('company_email')    || '',
+            logo_url: d.logo_url ? normalizeLogoUrl(d.logo_url)
+                                 : (localStorage.getItem('company_logo_url') || ''),
+        };
+        // Keep localStorage in sync so other components benefit
+        if (_company.name)     localStorage.setItem('company_name',     _company.name);
+        if (_company.logo_url) localStorage.setItem('company_logo_url', _company.logo_url);
+    } catch {
+        _company = {
+            name:     localStorage.getItem('company_name')     || '',
+            address:  localStorage.getItem('company_address')  || '',
+            phone:    localStorage.getItem('company_phone')    || '',
+            email:    localStorage.getItem('company_email')    || '',
+            logo_url: localStorage.getItem('company_logo_url') || '',
+        };
+    }
+    return _company;
+}
+
+function normalizeLogoUrl(value) {
+    if (!value) return '';
+    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/storage/')) return value;
+    return `/storage/${value.replace(/^\/+/, '')}`;
 }
 
 const fmt = (n) =>
@@ -71,9 +100,15 @@ const fmt = (n) =>
  *   }
  * @param {object} [settingsOverride] — pass already-loaded settings to skip a fetch
  */
-export function buildReceiptHTML(data, settingsOverride) {
+export function buildReceiptHTML(data, settingsOverride, companyOverride) {
     const s = settingsOverride || _settings || {};
-    const co = getCompany();
+    const co = companyOverride || _company || {
+        name:     localStorage.getItem('company_name')     || '',
+        address:  localStorage.getItem('company_address')  || '',
+        phone:    localStorage.getItem('company_phone')    || '',
+        email:    localStorage.getItem('company_email')    || '',
+        logo_url: localStorage.getItem('company_logo_url') || '',
+    };
 
     // Paper width
     const widthMap = { '58mm': '200px', '80mm': '280px', 'A4': '595px' };
@@ -137,9 +172,9 @@ export function buildReceiptHTML(data, settingsOverride) {
         body += row('Phone:', escHtml(data.customer.phone));
     }
 
-    // Cashier
-    if (bool('show_cashier_name', true) && data.cashierName) {
-        body += row('Cashier:', escHtml(data.cashierName));
+    // Cashier — POS sends 'cashier', some callers send 'cashierName'
+    if (bool('show_cashier_name', true) && (data.cashierName || data.cashier)) {
+        body += row('Cashier:', escHtml(data.cashierName || data.cashier));
     }
 
     // Sale category
@@ -253,8 +288,11 @@ function escHtml(str) {
  *   opts.settings    {object}  — already-loaded settings (skips fetch)
  */
 export async function printReceipt(receiptData, opts = {}) {
-    const settings = opts.settings || (await loadPrintSettings());
-    const html = buildReceiptHTML(receiptData, settings);
+    const [settings, company] = await Promise.all([
+        opts.settings ? Promise.resolve(opts.settings) : loadPrintSettings(),
+        loadCompanyInfo(),
+    ]);
+    const html = buildReceiptHTML(receiptData, settings, company);
     const copies = parseInt(settings.copies_receipt) || 1;
 
     // Try QZ Tray silent printing
