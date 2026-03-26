@@ -15,6 +15,8 @@ use App\Models\StockMovement;
 use App\Models\Payment;
 use App\Models\POSTicket;
 use App\Models\CashierSession;
+use App\Models\CustomerWalletTransaction;
+use App\Services\CreditAnalysisService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -164,8 +166,8 @@ class POSController extends Controller
     {
         $tenantId = Auth::user()->tenant_id;
 
-        // Fields needed for POS including credit info
-        $customerFields = ['id', 'name', 'phone', 'email', 'customer_type', 'credit_limit', 'outstanding_balance', 'credit_blocked', 'payment_terms_days'];
+        // Fields needed for POS including credit info and wallet
+        $customerFields = ['id', 'name', 'phone', 'email', 'customer_type', 'credit_limit', 'outstanding_balance', 'wallet_balance', 'credit_blocked', 'payment_terms_days'];
 
         $query = Customer::where(function ($q) use ($tenantId) {
                 if ($tenantId) {
@@ -221,7 +223,7 @@ class POSController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:1',
             'items.*.price' => 'required|numeric|min:0',
-            'payment_method' => 'required|in:cash,card,transfer,split,credit',
+            'payment_method' => 'required|in:cash,card,transfer,split,credit,wallet',
             'discount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|in:percentage,fixed',
             'customer_id' => 'required|exists:customers,id',
@@ -241,6 +243,7 @@ class POSController extends Controller
 
         // Check if credit sale and validate customer credit
         $isCredit = $request->payment_method === 'credit';
+        $isWallet = $request->payment_method === 'wallet';
         $customer = Customer::find($request->customer_id);
         
         if ($isCredit) {
@@ -250,6 +253,10 @@ class POSController extends Controller
                     'message' => 'Credit is not allowed for this customer',
                 ], 422);
             }
+        }
+
+        if ($isWallet && !$customer) {
+            return response()->json(['success' => false, 'message' => 'Please select a customer to use wallet payment'], 422);
         }
 
         try {
@@ -296,16 +303,33 @@ class POSController extends Controller
 
             // Map payment method to payment type
             $paymentTypeMap = [
-                'cash' => 'cash',
-                'card' => 'card',
+                'cash'     => 'cash',
+                'card'     => 'card',
                 'transfer' => 'transfer',
-                'split' => 'cash', // Default to cash for split payments
-                'credit' => 'credit',
+                'split'    => 'cash',
+                'credit'   => 'credit',
+                'wallet'   => 'wallet',
             ];
             $paymentType = $paymentTypeMap[$request->payment_method] ?? 'cash';
 
+            // Wallet validation: check balance is enough (or credit can cover remainder)
+            if ($isWallet) {
+                $walletBalance = $customer->getWalletBalance();
+                if ($walletBalance <= 0) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => 'Customer wallet is empty'], 422);
+                }
+                if ($walletBalance < $total && !$customer->isCreditAllowed()) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Insufficient wallet balance ({$walletBalance}). Customer does not have credit facility for the remainder.",
+                    ], 422);
+                }
+            }
+
             // Determine payment status based on payment method
-            $paymentStatus = $isCredit ? 'pending' : 'paid';
+            $paymentStatus = ($isCredit || ($isWallet && $customer->getWalletBalance() < $total)) ? 'pending' : 'paid';
 
             // Create sales order
             $salesOrder = SalesOrder::create([
@@ -404,11 +428,62 @@ class POSController extends Controller
             // Create payment record or credit transaction
             if ($isCredit) {
                 // Create credit transaction for tracking
-                $creditService = app(\App\Services\CreditAnalysisService::class);
+                $creditService = app(CreditAnalysisService::class);
                 $creditTransaction = $creditService->createTransaction($customer, $total, [
                     'sales_order_id' => $salesOrder->id,
                     'notes' => "POS Credit Sale: {$orderNumber}",
                 ]);
+            } elseif ($isWallet) {
+                // ── WALLET PAYMENT ──────────────────────────────────────
+                $walletBalance   = $customer->getWalletBalance();
+                $walletCoverage  = min($total, $walletBalance);
+                $creditRemainder = $total - $walletCoverage;
+
+                // Deduct wallet
+                $balanceBefore = $walletBalance;
+                $customer->decrement('wallet_balance', $walletCoverage);
+                $customer->refresh();
+
+                CustomerWalletTransaction::create([
+                    'tenant_id'       => $tenantId,
+                    'customer_id'     => $customer->id,
+                    'reference'       => CustomerWalletTransaction::generateReference(),
+                    'type'            => 'purchase',
+                    'amount'          => $walletCoverage,
+                    'balance_before'  => $balanceBefore,
+                    'balance_after'   => $customer->getWalletBalance(),
+                    'sales_order_id'  => $salesOrder->id,
+                    'notes'           => "POS Sale: {$orderNumber}",
+                    'created_by'      => $user->id,
+                ]);
+
+                // Create payment record for the wallet portion
+                $paymentReference = 'PAY-' . now()->format('Ymd') . '-' . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+                Payment::create([
+                    'tenant_id'             => $tenantId,
+                    'branch_id'             => $branchId,
+                    'payment_reference'     => $paymentReference,
+                    'payable_type'          => SalesOrder::class,
+                    'payable_id'            => $salesOrder->id,
+                    'customer_id'           => $customer->id,
+                    'payment_type'          => 'receivable',
+                    'payment_method'        => 'wallet',
+                    'amount'                => $walletCoverage,
+                    'payment_date'          => now(),
+                    'status'                => 'completed',
+                    'transaction_reference' => $orderNumber,
+                    'notes'                 => 'POS Sale - Wallet Payment',
+                    'recorded_by'           => $user->id,
+                ]);
+
+                // If wallet didn't fully cover the sale → put remainder on credit
+                if ($creditRemainder > 0) {
+                    $creditService = app(CreditAnalysisService::class);
+                    $creditService->createTransaction($customer, $creditRemainder, [
+                        'sales_order_id' => $salesOrder->id,
+                        'notes'          => "POS Sale (wallet shortfall): {$orderNumber}",
+                    ]);
+                }
             } else {
                 // Create immediate payment record
                 $paymentReference = 'PAY-' . now()->format('Ymd') . '-' . str_pad($sequence, 4, '0', STR_PAD_LEFT);

@@ -121,6 +121,20 @@ const customerAPI = {
         const response = await api.post(`/customers/${id}/apply-credit-recommendations`);
         return response.data;
     },
+
+    // Wallet
+    depositWallet: async (id, data) => {
+        const response = await api.post(`/customers/${id}/wallet/deposit`, data);
+        return response.data;
+    },
+    getWalletTransactions: async (id, params = {}) => {
+        const response = await api.get(`/customers/${id}/wallet/transactions`, { params });
+        return response.data;
+    },
+    getWalletBalance: async (id) => {
+        const response = await api.get(`/customers/${id}/wallet/balance`);
+        return response.data.data;
+    },
 };
 
 // Credit Analytics API (global)

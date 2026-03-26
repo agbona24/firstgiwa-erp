@@ -19,7 +19,7 @@ class StoreSalesOrderRequest extends FormRequest
     {
         $rules = [
             'customer_id' => 'required|exists:customers,id',
-            'payment_type' => 'required|in:cash,credit,bank_transfer',
+            'payment_type' => 'required|in:cash,credit,bank_transfer,wallet',
             'bank_account_id' => 'required_if:payment_type,bank_transfer|nullable|exists:bank_accounts,id',
             'tax_id' => 'nullable|exists:taxes,id',
             'formula_id' => 'nullable|exists:formulas,id',

@@ -91,6 +91,7 @@ export default function CreateBooking() {
     const creditUtilization = selectedCustomer && selectedCustomer.credit_limit > 0
         ? ((selectedCustomer.credit_used || 0) / selectedCustomer.credit_limit) * 100
         : 0;
+    const walletBalance = parseFloat(selectedCustomer?.wallet_balance) || 0;
 
     const canSelectCredit = selectedCustomer && ['credit', 'both'].includes(selectedCustomer.customer_type) && !selectedCustomer.credit_blocked;
 
@@ -160,7 +161,8 @@ export default function CreateBooking() {
     // Step validation - require bank account selection when bank_transfer is chosen
     const canProceedStep0 = selectedCustomer && 
         (paymentType !== 'credit' || canSelectCredit) &&
-        (paymentType !== 'bank_transfer' || selectedBankAccountId);
+        (paymentType !== 'bank_transfer' || selectedBankAccountId) &&
+        (paymentType !== 'wallet' || walletBalance > 0);
     const canProceedStep1 = lineItems.length > 0;
 
     function addDirectItem() {
@@ -381,13 +383,15 @@ export default function CreateBooking() {
                     {/* Payment type */}
                     <div className="mb-6">
                         <label className="block text-sm font-semibold text-slate-700 mb-2">Payment Type</label>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             {[
                                 { value: 'cash', label: 'Cash' },
                                 { value: 'credit', label: 'Credit' },
-                                { value: 'bank_transfer', label: 'Bank Transfer' }
+                                { value: 'bank_transfer', label: 'Bank Transfer' },
+                                { value: 'wallet', label: 'Wallet' },
                             ].map(opt => {
-                                const disabled = opt.value === 'credit' && !canSelectCredit;
+                                const disabled = (opt.value === 'credit' && !canSelectCredit) ||
+                                    (opt.value === 'wallet' && walletBalance <= 0);
                                 return (
                                     <label key={opt.value} className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all
                                         ${disabled ? 'opacity-50 cursor-not-allowed border-slate-200 bg-slate-50' : paymentType === opt.value ? 'border-blue-600 bg-blue-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'}`}>
@@ -410,6 +414,9 @@ export default function CreateBooking() {
                                             <span className="text-xs text-slate-400 ml-1">
                                                 ({selectedCustomer.credit_blocked ? 'blocked' : 'cash-only'})
                                             </span>
+                                        )}
+                                        {opt.value === 'wallet' && disabled && selectedCustomer && (
+                                            <span className="text-xs text-slate-400 ml-1">(empty)</span>
                                         )}
                                     </label>
                                 );
@@ -446,6 +453,36 @@ export default function CreateBooking() {
                                 <p className="mt-2 text-sm text-red-600 font-medium">
                                     ⚠️ This customer has exhausted their credit facility.
                                 </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Wallet info when wallet is selected */}
+                    {paymentType === 'wallet' && selectedCustomer && (
+                        <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-green-800">Wallet Payment</span>
+                                <Badge variant={walletBalance > 0 ? 'approved' : 'rejected'}>{walletBalance > 0 ? 'Has Balance' : 'Empty'}</Badge>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div>
+                                    <span className="text-green-600">Wallet Balance</span>
+                                    <p className="font-bold text-green-900">{fmt(walletBalance)}</p>
+                                </div>
+                                <div>
+                                    <span className="text-green-600">Order Total</span>
+                                    <p className="font-bold text-slate-900">{fmt(grandTotal)}</p>
+                                </div>
+                                <div>
+                                    <span className="text-green-600">{walletBalance < grandTotal ? 'Shortfall' : 'Remaining'}</span>
+                                    <p className={`font-bold ${walletBalance < grandTotal ? 'text-amber-600' : 'text-green-700'}`}>{fmt(Math.abs(walletBalance - grandTotal))}</p>
+                                </div>
+                            </div>
+                            {walletBalance < grandTotal && canSelectCredit && (
+                                <p className="mt-2 text-xs text-amber-700">Wallet covers {fmt(walletBalance)}, remaining {fmt(grandTotal - walletBalance)} will be charged to credit facility.</p>
+                            )}
+                            {walletBalance < grandTotal && !canSelectCredit && (
+                                <p className="mt-2 text-xs text-red-700">⚠️ Wallet balance is insufficient and no credit facility is available.</p>
                             )}
                         </div>
                     )}

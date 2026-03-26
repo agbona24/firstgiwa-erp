@@ -10,7 +10,7 @@ import SlideOut from '../../components/ui/SlideOut';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { useToast } from '../../contexts/ToastContext';
 import customerAPI from '../../services/customerAPI';
-import { creditFacilityTypesAPI } from '../../services/settingsAPI';
+import { creditFacilityTypesAPI, bankAccountsAPI } from '../../services/settingsAPI';
 import { exportSelectedToCSV } from '../../utils/exportUtils';
 
 const fmt = (n) => window.formatCurrency(n, { minimumFractionDigits: 2 });
@@ -37,12 +37,22 @@ export default function CustomerList() {
     const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState({ isOpen: false, count: 0, indices: [] });
     const [creditFacilityTypes, setCreditFacilityTypes] = useState([]);
 
+    // Wallet top-up
+    const [showTopUp, setShowTopUp] = useState(false);
+    const [topUpCustomer, setTopUpCustomer] = useState(null);
+    const [topUpSubmitting, setTopUpSubmitting] = useState(false);
+    const [topUpForm, setTopUpForm] = useState({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' });
+    const [bankAccounts, setBankAccounts] = useState([]);
+    const [walletHistory, setWalletHistory] = useState([]);
+    const [showWalletHistory, setShowWalletHistory] = useState(false);
+    const [walletHistoryCustomer, setWalletHistoryCustomer] = useState(null);
+
     // Fetch customers from API
     useEffect(() => {
         fetchCustomers();
     }, [search, paymentFilter, categoryFilter, statusFilter]);
 
-    // Fetch credit facility types
+    // Fetch credit facility types + bank accounts
     useEffect(() => {
         const fetchCreditTypes = async () => {
             try {
@@ -52,7 +62,17 @@ export default function CustomerList() {
                 console.error('Error fetching credit facility types:', error);
             }
         };
+        const fetchBankAccounts = async () => {
+            try {
+                const res = await bankAccountsAPI.list();
+                const list = res?.data?.data?.bank_accounts || res?.data?.bank_accounts || [];
+                setBankAccounts(list.filter(b => b.is_active));
+            } catch (error) {
+                console.error('Error fetching bank accounts:', error);
+            }
+        };
         fetchCreditTypes();
+        fetchBankAccounts();
     }, []);
 
     const fetchCustomers = async () => {
@@ -152,6 +172,9 @@ export default function CustomerList() {
             <div>
                 <div className="font-medium text-slate-900">{val}</div>
                 <div className="text-xs text-slate-500">{row.contact_person}</div>
+                {parseFloat(row.wallet_balance) > 0 && (
+                    <div className="mt-0.5"><span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">💰 {fmt(row.wallet_balance)}</span></div>
+                )}
             </div>
         )},
         { key: 'customer_category', label: 'Category', sortable: true, render: (val) => (
@@ -202,6 +225,45 @@ export default function CustomerList() {
         }
     };
 
+    const handleTopUp = async () => {
+        if (!topUpCustomer) return;
+        setTopUpSubmitting(true);
+        try {
+            const payload = {
+                amount: parseFloat(topUpForm.amount),
+                payment_method: topUpForm.payment_method,
+                payment_reference: topUpForm.payment_reference || undefined,
+                notes: topUpForm.notes || undefined,
+            };
+            if (topUpForm.payment_method === 'bank_transfer' && topUpForm.bank_account_id) {
+                payload.bank_account_id = parseInt(topUpForm.bank_account_id);
+            }
+            await customerAPI.depositWallet(topUpCustomer.id, payload);
+            toast.success(`Wallet topped up for ${topUpCustomer.name}`);
+            setShowTopUp(false);
+            setTopUpCustomer(null);
+            setTopUpForm({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' });
+            fetchCustomers();
+        } catch (error) {
+            console.error('Error topping up wallet:', error);
+            toast.error(error.response?.data?.message || 'Failed to top up wallet');
+        } finally {
+            setTopUpSubmitting(false);
+        }
+    };
+
+    const handleViewWalletHistory = async (customer) => {
+        setWalletHistoryCustomer(customer);
+        setShowWalletHistory(true);
+        try {
+            const res = await customerAPI.getWalletTransactions(customer.id);
+            setWalletHistory(res.data || []);
+        } catch (error) {
+            console.error('Error fetching wallet history:', error);
+            toast.error('Failed to load wallet history');
+        }
+    };
+
     const handleBlockToggle = async (customer) => {
         try {
             const block = !customer.credit_blocked;
@@ -224,6 +286,8 @@ export default function CustomerList() {
         { label: 'View', onClick: (row) => setSelectedCustomer(row), variant: 'outline' },
         { label: 'Edit', onClick: (row) => handleEdit(row), variant: 'ghost' },
         { label: 'Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, variant: 'ghost', show: (row) => creditEnabledTypes.includes(row.customer_type) },
+        { label: 'Top Up Wallet', onClick: (row) => { setTopUpCustomer(row); setTopUpForm({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' }); setShowTopUp(true); }, variant: 'ghost' },
+        { label: 'Wallet Log', onClick: (row) => handleViewWalletHistory(row), variant: 'ghost' },
         { label: 'Delete', onClick: (row) => setDeleteConfirm({ isOpen: true, customer: row }), variant: 'danger' },
     ];
 
@@ -646,6 +710,94 @@ export default function CustomerList() {
                         <Button variant="outline" onClick={() => { setShowEdit(false); setEditingCustomer(null); }}>Cancel</Button>
                     </div>
                 </form>
+            </SlideOut>
+
+            {/* Wallet Top-Up SlideOut */}
+            <SlideOut isOpen={showTopUp} onClose={() => { setShowTopUp(false); setTopUpCustomer(null); }} title={`Top Up Wallet: ${topUpCustomer?.name || ''}`} size="md">
+                {topUpCustomer && (
+                    <div className="space-y-5">
+                        {/* Current Balance */}
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-semibold text-green-800">Current Wallet Balance</span>
+                                <span className="text-2xl font-bold text-green-700">{fmt(topUpCustomer.wallet_balance || 0)}</span>
+                            </div>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); handleTopUp(); }} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Amount to Deposit ({window.getCurrencySymbol()}) *</label>
+                                <input type="number" min="1" step="0.01" required value={topUpForm.amount} onChange={(e) => setTopUpForm({...topUpForm, amount: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="e.g. 50000" />
+                                {topUpForm.amount && parseFloat(topUpForm.amount) > 0 && (
+                                    <p className="text-xs text-green-700 mt-1">New balance will be: {fmt((parseFloat(topUpCustomer.wallet_balance) || 0) + parseFloat(topUpForm.amount))}</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method *</label>
+                                <select value={topUpForm.payment_method} onChange={(e) => setTopUpForm({...topUpForm, payment_method: e.target.value, bank_account_id: ''})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                    <option value="cash">Cash</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="pos">POS / Card</option>
+                                    <option value="cheque">Cheque</option>
+                                </select>
+                            </div>
+                            {topUpForm.payment_method === 'bank_transfer' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
+                                    <select value={topUpForm.bank_account_id} onChange={(e) => setTopUpForm({...topUpForm, bank_account_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                        <option value="">-- Select Bank Account --</option>
+                                        {bankAccounts.map(b => (
+                                            <option key={b.id} value={b.id}>{b.bank_name} - {b.account_number} ({b.account_name})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Reference</label>
+                                <input type="text" value={topUpForm.payment_reference} onChange={(e) => setTopUpForm({...topUpForm, payment_reference: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="e.g. Teller number, cheque number..." />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+                                <textarea value={topUpForm.notes} onChange={(e) => setTopUpForm({...topUpForm, notes: e.target.value})} rows={2} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Optional notes..." />
+                            </div>
+                            <div className="flex gap-3 pt-4 border-t">
+                                <Button type="submit" disabled={topUpSubmitting}>{topUpSubmitting ? 'Processing...' : 'Deposit to Wallet'}</Button>
+                                <Button variant="outline" onClick={() => { setShowTopUp(false); setTopUpCustomer(null); }}>Cancel</Button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+            </SlideOut>
+
+            {/* Wallet Transaction History SlideOut */}
+            <SlideOut isOpen={showWalletHistory} onClose={() => { setShowWalletHistory(false); setWalletHistoryCustomer(null); setWalletHistory([]); }} title={`Wallet History: ${walletHistoryCustomer?.name || ''}`} size="lg">
+                {walletHistoryCustomer && (
+                    <div className="space-y-4">
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-semibold text-green-800">Current Wallet Balance</span>
+                                <span className="text-2xl font-bold text-green-700">{fmt(walletHistoryCustomer.wallet_balance || 0)}</span>
+                            </div>
+                        </div>
+                        {walletHistory.length === 0 ? (
+                            <p className="text-center text-slate-400 py-8">No wallet transactions yet.</p>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead><tr className="border-b text-left text-slate-500"><th className="py-2">Date</th><th>Reference</th><th>Type</th><th className="text-right">Amount</th><th className="text-right">Balance After</th></tr></thead>
+                                <tbody>
+                                    {walletHistory.map((t, i) => (
+                                        <tr key={i} className="border-b">
+                                            <td className="py-2 text-xs">{t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}</td>
+                                            <td className="font-mono text-blue-700 text-xs">{t.reference}</td>
+                                            <td><Badge variant={t.type === 'deposit' ? 'approved' : t.type === 'purchase' ? 'pending' : 'draft'}>{t.type}</Badge></td>
+                                            <td className={`text-right font-semibold ${t.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>{t.type === 'deposit' ? '+' : '-'}{fmt(t.amount)}</td>
+                                            <td className="text-right">{fmt(t.balance_after)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                )}
             </SlideOut>
 
             {/* Delete Confirmation Modal */}

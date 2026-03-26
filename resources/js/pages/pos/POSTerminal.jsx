@@ -431,6 +431,25 @@ export default function POSTerminal() {
             }
         }
 
+        if (paymentMethod === 'wallet') {
+            const walletBal = parseFloat(selectedCustomer?.wallet_balance) || 0;
+            if (!selectedCustomer || selectedCustomer.customer_type === 'walk_in') {
+                toast.error('Wallet payment not available for walk-in customers');
+                return;
+            }
+            if (walletBal <= 0) {
+                toast.error('Customer wallet balance is empty');
+                return;
+            }
+            const creditLimit = parseFloat(selectedCustomer?.credit_limit) || 0;
+            const outstanding = parseFloat(selectedCustomer?.outstanding_balance) || 0;
+            const availableCredit = creditLimit - outstanding;
+            if (walletBal < total && availableCredit < (total - walletBal)) {
+                toast.error('Insufficient wallet and credit to complete this sale');
+                return;
+            }
+        }
+
         if (!selectedCustomer || !selectedCustomer.id) {
             toast.error('Please select a customer');
             return;
@@ -1273,21 +1292,23 @@ export default function POSTerminal() {
 
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-slate-700 mb-2">Payment Method</label>
-                        <div className="grid grid-cols-4 gap-2">
-                            {['cash', 'pos', 'transfer', 'credit'].map(method => {
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                            {['cash', 'pos', 'transfer', 'credit', 'wallet'].map(method => {
                                 // Check if credit is available for this customer
                                 const creditLimit = parseFloat(selectedCustomer?.credit_limit) || 0;
                                 const outstanding = parseFloat(selectedCustomer?.outstanding_balance) || 0;
                                 const availableCredit = creditLimit - outstanding;
                                 const canUseCredit = method === 'credit' ? (creditLimit > 0 && availableCredit >= total && !selectedCustomer?.credit_blocked) : true;
-                                const isWalkIn = selectedCustomer?.customer_type === 'walk-in';
+                                const isWalkIn = selectedCustomer?.customer_type === 'walk-in' || selectedCustomer?.customer_type === 'walk_in';
                                 const creditDisabled = method === 'credit' && (isWalkIn || !canUseCredit);
+                                const walletBal = parseFloat(selectedCustomer?.wallet_balance) || 0;
+                                const walletDisabled = method === 'wallet' && (isWalkIn || walletBal <= 0);
                                 
                                 return (
                                     <button
                                         key={method}
                                         onClick={() => {
-                                            if (creditDisabled) return;
+                                            if (creditDisabled || walletDisabled) return;
                                             setPaymentMethod(method);
                                             // Prefill amount for cash
                                             if (method === 'cash') {
@@ -1296,17 +1317,17 @@ export default function POSTerminal() {
                                                 setAmountReceived('');
                                             }
                                         }}
-                                        disabled={creditDisabled}
+                                        disabled={creditDisabled || walletDisabled}
                                         className={`px-3 py-3 rounded-lg font-medium capitalize transition text-sm ${
                                             paymentMethod === method
                                                 ? 'bg-blue-600 text-white'
-                                                : creditDisabled
+                                                : (creditDisabled || walletDisabled)
                                                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
-                                        title={creditDisabled ? (isWalkIn ? 'Credit not available for cash booking customers' : 'Insufficient credit limit') : ''}
+                                        title={creditDisabled ? (isWalkIn ? 'Credit not available for cash booking customers' : 'Insufficient credit limit') : walletDisabled ? (isWalkIn ? 'Wallet not available for walk-in' : 'Wallet is empty') : ''}
                                     >
-                                        {method === 'pos' ? 'POS/Card' : method === 'transfer' ? 'Transfer' : method === 'credit' ? 'Credit' : 'Cash'}
+                                        {method === 'pos' ? 'POS/Card' : method === 'transfer' ? 'Transfer' : method === 'credit' ? 'Credit' : method === 'wallet' ? 'Wallet' : 'Cash'}
                                     </button>
                                 );
                             })}
@@ -1400,6 +1421,36 @@ export default function POSTerminal() {
                         </div>
                     )}
 
+                    {paymentMethod === 'wallet' && (
+                        <div className="mb-6">
+                            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                                <p className="font-semibold text-green-900 mb-3">Wallet Payment</p>
+                                <div className="grid grid-cols-3 gap-3 text-center">
+                                    <div className="bg-white rounded-lg p-2">
+                                        <p className="text-xs text-slate-500">Wallet Balance</p>
+                                        <p className="font-bold text-green-700">{window.getCurrencySymbol()}{(parseFloat(selectedCustomer?.wallet_balance) || 0).toLocaleString()}</p>
+                                    </div>
+                                    <div className="bg-white rounded-lg p-2">
+                                        <p className="text-xs text-slate-500">Sale Total</p>
+                                        <p className="font-bold text-slate-900">{window.getCurrencySymbol()}{total.toLocaleString()}</p>
+                                    </div>
+                                    <div className="bg-white rounded-lg p-2">
+                                        <p className="text-xs text-slate-500">{(parseFloat(selectedCustomer?.wallet_balance) || 0) < total ? 'Credit Needed' : 'Remaining'}</p>
+                                        <p className={`font-bold ${(parseFloat(selectedCustomer?.wallet_balance) || 0) < total ? 'text-amber-600' : 'text-green-700'}`}>
+                                            {window.getCurrencySymbol()}{Math.abs((parseFloat(selectedCustomer?.wallet_balance) || 0) - total).toLocaleString()}
+                                        </p>
+                                    </div>
+                                </div>
+                                {(parseFloat(selectedCustomer?.wallet_balance) || 0) < total && (parseFloat(selectedCustomer?.credit_limit) || 0) > 0 && (
+                                    <p className="mt-3 text-xs text-amber-700">Wallet covers {window.getCurrencySymbol()}{(parseFloat(selectedCustomer?.wallet_balance) || 0).toLocaleString()}, remaining {window.getCurrencySymbol()}{(total - (parseFloat(selectedCustomer?.wallet_balance) || 0)).toLocaleString()} charged to credit facility.</p>
+                                )}
+                                {(parseFloat(selectedCustomer?.wallet_balance) || 0) < total && !((parseFloat(selectedCustomer?.credit_limit) || 0) > 0) && (
+                                    <p className="mt-3 text-xs text-red-700">⚠️ Insufficient wallet. No credit facility available.</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex gap-3">
                         <Button variant="ghost" onClick={() => setShowPaymentModal(false)} className="flex-1">
                             Cancel
@@ -1410,10 +1461,11 @@ export default function POSTerminal() {
                             className="flex-1"
                             disabled={
                                 (paymentMethod === 'transfer' && bankAccounts.filter(b => b.is_active).length === 0) ||
-                                (paymentMethod === 'credit' && (total > ((parseFloat(selectedCustomer?.credit_limit) || 0) - (parseFloat(selectedCustomer?.outstanding_balance) || 0))))
+                                (paymentMethod === 'credit' && (total > ((parseFloat(selectedCustomer?.credit_limit) || 0) - (parseFloat(selectedCustomer?.outstanding_balance) || 0)))) ||
+                                (paymentMethod === 'wallet' && (parseFloat(selectedCustomer?.wallet_balance) || 0) <= 0)
                             }
                         >
-                            {paymentMethod === 'credit' ? 'Charge to Credit' : 'Process Payment'}
+                            {paymentMethod === 'credit' ? 'Charge to Credit' : paymentMethod === 'wallet' ? 'Pay from Wallet' : 'Process Payment'}
                         </Button>
                     </div>
                 </div>

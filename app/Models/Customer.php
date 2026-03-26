@@ -29,6 +29,7 @@ class Customer extends Model
         'credit_facility_type_id',
         'tax_id',
         'is_active',
+        'wallet_balance',
     ];
 
     protected $casts = [
@@ -37,6 +38,7 @@ class Customer extends Model
         'outstanding_balance' => 'decimal:2',
         'credit_blocked' => 'boolean',
         'is_active' => 'boolean',
+        'wallet_balance' => 'decimal:2',
     ];
 
     /**
@@ -81,6 +83,16 @@ class Customer extends Model
     public function creditScore()
     {
         return $this->hasOne(CustomerCreditScore::class);
+    }
+
+    public function walletTransactions()
+    {
+        return $this->hasMany(CustomerWalletTransaction::class);
+    }
+
+    public function getWalletBalance(): float
+    {
+        return max(0, floatval($this->wallet_balance));
     }
 
     // Scopes

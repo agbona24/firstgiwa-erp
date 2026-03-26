@@ -7,10 +7,12 @@ use App\Models\SalesOrderItem;
 use App\Models\Customer;
 use App\Models\Formula;
 use App\Models\Setting;
+use App\Models\CustomerWalletTransaction;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\CreditLimitExceededException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ApprovalRequiredException;
+use App\Services\CreditAnalysisService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -123,6 +125,14 @@ class SalesOrderService extends BaseService
                         : 'Customer is not set up for credit purchases'
                 );
             }
+            if ($paymentType === 'wallet') {
+                $walletBalance = $customer->getWalletBalance();
+                if ($walletBalance <= 0) {
+                    throw new BusinessRuleException('Customer wallet is empty. Please top up the wallet first.');
+                }
+                // Insufficient wallet + no credit → reject
+                // Insufficient wallet + credit → allowed (remainder goes on credit after order is created)
+            }
 
             // Process items based on order type
             if (!empty($data['formula_id'])) {
@@ -161,6 +171,18 @@ class SalesOrderService extends BaseService
                 
                 if (!$creditCheck['allowed']) {
                     throw new BusinessRuleException($creditCheck['reason']);
+                }
+            }
+
+            // Wallet: if insufficient and no credit → reject
+            if ($paymentType === 'wallet') {
+                $walletBalance = $customer->getWalletBalance();
+                if ($walletBalance < $totalAmount && !$customer->isCreditAllowed()) {
+                    throw new BusinessRuleException(
+                        "Insufficient wallet balance (" . number_format($walletBalance, 2) . "). " .
+                        "Customer does not have a credit facility for the shortfall of " .
+                        number_format($totalAmount - $walletBalance, 2) . "."
+                    );
                 }
             }
 
@@ -240,10 +262,41 @@ class SalesOrderService extends BaseService
                 }
             }
 
+            // ── WALLET DEDUCTION ───────────────────────────────────────────
+            if ($paymentType === 'wallet') {
+                $walletBalance  = $customer->getWalletBalance();
+                $walletCoverage = min($totalAmount, $walletBalance);
+                $remainder      = $totalAmount - $walletCoverage;
+
+                $customer->decrement('wallet_balance', $walletCoverage);
+                $customer->refresh();
+
+                CustomerWalletTransaction::create([
+                    'tenant_id'      => $customer->tenant_id,
+                    'customer_id'    => $customer->id,
+                    'reference'      => CustomerWalletTransaction::generateReference(),
+                    'type'           => 'purchase',
+                    'amount'         => $walletCoverage,
+                    'balance_before' => $walletBalance,
+                    'balance_after'  => $customer->getWalletBalance(),
+                    'sales_order_id' => $salesOrder->id,
+                    'notes'          => "Sales Order: {$salesOrder->order_number}",
+                    'created_by'     => Auth::id(),
+                ]);
+
+                // If wallet doesn't cover the full order, put the remainder on credit
+                if ($remainder > 0) {
+                    $creditService = app(CreditAnalysisService::class);
+                    $creditService->createTransaction($customer, $remainder, [
+                        'sales_order_id' => $salesOrder->id,
+                        'notes'          => "SO wallet shortfall: {$salesOrder->order_number}",
+                    ]);
+                }
+            }
+
             // Throw exception if approval required
             if ($status === 'pending' && $this->requiresApproval($totalAmount)) {
                 throw new ApprovalRequiredException(
-                    "Sales order created but requires approval (threshold: ₦" . 
                     number_format(config('erp.approval_thresholds.sales_order', 1000000), 2) . ")"
                 );
             }

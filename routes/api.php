@@ -20,6 +20,7 @@ use App\Http\Controllers\API\PayrollController;
 use App\Http\Controllers\API\POSController;
 use App\Http\Controllers\API\AuditLogController;
 use App\Http\Controllers\API\CreditAnalyticsController;
+use App\Http\Controllers\API\CustomerWalletController;
 
 // Settings Controllers
 use App\Http\Controllers\API\Settings\CompanyController;
@@ -184,6 +185,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/{customer}/credit-transactions', [CreditAnalyticsController::class, 'transactions']);
             Route::get('/{customer}/credit-payments', [CreditAnalyticsController::class, 'payments']);
             Route::post('/{customer}/apply-credit-recommendations', [CreditAnalyticsController::class, 'applyRecommendations']);
+
+            // Wallet
+            Route::post('/{customer}/wallet/deposit', [CustomerWalletController::class, 'deposit']);
+            Route::get('/{customer}/wallet/transactions', [CustomerWalletController::class, 'transactions']);
+            Route::get('/{customer}/wallet/balance', [CustomerWalletController::class, 'balance']);
         });
         Route::apiResource('customers', CustomerController::class);
 
