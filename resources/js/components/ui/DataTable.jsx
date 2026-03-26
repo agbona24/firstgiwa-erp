@@ -1,6 +1,46 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import EmptyState from './EmptyState';
 import Button from './Button';
+
+function ActionDropdown({ actions, row }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+    const visible = actions.filter(a => !a.show || a.show(row));
+    if (visible.length === 0) return null;
+    return (
+        <div className="relative" ref={ref}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+                title="More actions"
+            >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+                </svg>
+            </button>
+            {open && (
+                <div className="absolute right-0 z-50 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                    {visible.map((action, i) => (
+                        <button
+                            key={i}
+                            onClick={() => { setOpen(false); action.onClick(row); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition ${
+                                action.variant === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-slate-700'
+                            }`}
+                        >
+                            {typeof action.label === 'function' ? action.label(row) : action.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function DataTable({
     columns,
@@ -216,8 +256,7 @@ export default function DataTable({
                                     {actions && actions.length > 0 && (
                                         <td className="px-6 py-4 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-2">
-                                                {actions.map((action, actionIdx) => {
-                                                    // Check if action should be shown for this row
+                                                {actions.filter(a => !a.dropdown).map((action, actionIdx) => {
                                                     if (action.show && typeof action.show === 'function' && !action.show(row)) {
                                                         return null;
                                                     }
@@ -232,6 +271,9 @@ export default function DataTable({
                                                         </Button>
                                                     );
                                                 })}
+                                                {actions.some(a => a.dropdown) && (
+                                                    <ActionDropdown actions={actions.filter(a => a.dropdown)} row={row} />
+                                                )}
                                             </div>
                                         </td>
                                     )}

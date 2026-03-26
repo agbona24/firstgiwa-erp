@@ -285,10 +285,10 @@ export default function CustomerList() {
     const actions = [
         { label: 'View', onClick: (row) => setSelectedCustomer(row), variant: 'outline' },
         { label: 'Edit', onClick: (row) => handleEdit(row), variant: 'ghost' },
-        { label: 'Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, variant: 'ghost', show: (row) => creditEnabledTypes.includes(row.customer_type) },
-        { label: 'Top Up Wallet', onClick: (row) => { setTopUpCustomer(row); setTopUpForm({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' }); setShowTopUp(true); }, variant: 'ghost' },
-        { label: 'Wallet Log', onClick: (row) => handleViewWalletHistory(row), variant: 'ghost' },
         { label: 'Delete', onClick: (row) => setDeleteConfirm({ isOpen: true, customer: row }), variant: 'danger' },
+        { label: 'Manage Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, dropdown: true, show: (row) => creditEnabledTypes.includes(row.customer_type) },
+        { label: 'Top Up Wallet', onClick: (row) => { setTopUpCustomer(row); setTopUpForm({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' }); setShowTopUp(true); }, dropdown: true },
+        { label: 'Wallet Log', onClick: (row) => handleViewWalletHistory(row), dropdown: true },
     ];
 
     // Bulk Actions
