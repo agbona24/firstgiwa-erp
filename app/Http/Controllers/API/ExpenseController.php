@@ -384,11 +384,55 @@ class ExpenseController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        $validated['tenant_id'] = $request->user()->tenant_id;
         $category = ExpenseCategory::create($validated);
 
         return response()->json([
             'message' => 'Expense category created successfully',
             'data' => $category,
         ], 201);
+    }
+
+    /**
+     * Update an expense category.
+     */
+    public function updateCategory(Request $request, int $id): JsonResponse
+    {
+        $category = ExpenseCategory::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'code' => 'sometimes|required|string|max:50|unique:expense_categories,code,' . $id,
+            'description' => 'nullable|string|max:500',
+            'parent_id' => 'nullable|exists:expense_categories,id',
+            'requires_approval' => 'boolean',
+            'approval_threshold' => 'nullable|numeric|min:0',
+            'is_active' => 'boolean',
+        ]);
+
+        $category->update($validated);
+
+        return response()->json([
+            'message' => 'Category updated successfully',
+            'data' => $category->fresh(),
+        ]);
+    }
+
+    /**
+     * Delete an expense category.
+     */
+    public function destroyCategory(int $id): JsonResponse
+    {
+        $category = ExpenseCategory::findOrFail($id);
+
+        if ($category->expenses()->count() > 0) {
+            return response()->json([
+                'message' => 'Cannot delete a category that has expenses. Deactivate it instead.',
+            ], 422);
+        }
+
+        $category->delete();
+
+        return response()->json(['message' => 'Category deleted successfully']);
     }
 }

@@ -229,6 +229,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/summary', [ExpenseController::class, 'summary']);
             Route::get('/categories', [ExpenseController::class, 'categories']);
             Route::post('/categories', [ExpenseController::class, 'storeCategory']);
+            Route::put('/categories/{id}', [ExpenseController::class, 'updateCategory']);
+            Route::delete('/categories/{id}', [ExpenseController::class, 'destroyCategory']);
             Route::post('/{expense}/approve', [ExpenseController::class, 'approve']);
             Route::post('/{expense}/disapprove', [ExpenseController::class, 'disapprove']);
             Route::post('/{expense}/reject', [ExpenseController::class, 'reject']);

@@ -62,14 +62,26 @@ const expenseAPI = {
     },
 
     // Get expense categories
-    getCategories: async () => {
-        const response = await api.get('/expenses/categories');
+    getCategories: async (params = {}) => {
+        const response = await api.get('/expenses/categories', { params });
         return response.data;
     },
 
     // Create expense category
     createCategory: async (data) => {
         const response = await api.post('/expenses/categories', data);
+        return response.data;
+    },
+
+    // Update expense category
+    updateCategory: async (id, data) => {
+        const response = await api.put(`/expenses/categories/${id}`, data);
+        return response.data;
+    },
+
+    // Delete expense category
+    deleteCategory: async (id) => {
+        const response = await api.delete(`/expenses/categories/${id}`);
         return response.data;
     },
 };
