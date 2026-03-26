@@ -307,7 +307,7 @@ export default function StaffList() {
         try {
             setLoading(true);
             const response = await staffAPI.getAll();
-            const list = Array.isArray(response) ? response : (response?.data || []);
+            const list = response?.data || (Array.isArray(response) ? response : []);
             console.log('Staff loaded:', list.length, 'records');
             setStaff(Array.isArray(list) ? list : []);
         } catch (error) {

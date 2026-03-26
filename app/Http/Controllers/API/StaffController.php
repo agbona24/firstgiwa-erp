@@ -16,7 +16,8 @@ class StaffController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Staff::with(['user', 'branch']);
+        $tenantId = $request->user()->tenant_id;
+        $query = Staff::with(['user', 'branch'])->where('tenant_id', $tenantId);
 
         // Search filter
         if ($request->filled('search')) {
@@ -63,7 +64,7 @@ class StaffController extends Controller
 
         // Always return all results - DataTable handles client-side pagination
         $staff = $query->get();
-        return response()->json($staff);
+        return response()->json(['success' => true, 'data' => $staff]);
     }
 
     /**
