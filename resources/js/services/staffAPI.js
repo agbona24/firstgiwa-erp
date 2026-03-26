@@ -2,10 +2,7 @@ import api from './api';
 
 const staffAPI = {
     // Get staff list with filters
-    getAll: async (params = {}) => {
-        const response = await api.get('/staff', { params });
-        return response.data;
-    },
+    getAll: (params = {}) => api.get('/staff', { params }),
 
     // Get single staff member
     get: async (id) => {

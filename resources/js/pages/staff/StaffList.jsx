@@ -307,9 +307,13 @@ export default function StaffList() {
         try {
             setLoading(true);
             const response = await staffAPI.getAll();
-            const list = response?.data || (Array.isArray(response) ? response : []);
+            // API may return either { data: [...] } or a raw array payload.
+            const payload = response?.data;
+            const list = Array.isArray(payload)
+                ? payload
+                : (Array.isArray(payload?.data) ? payload.data : []);
             console.log('Staff loaded:', list.length, 'records');
-            setStaff(Array.isArray(list) ? list : []);
+            setStaff(list);
         } catch (error) {
             console.error('Error fetching staff:', error);
             toast.error('Failed to load staff');

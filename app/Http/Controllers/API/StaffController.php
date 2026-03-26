@@ -16,11 +16,7 @@ class StaffController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $tenantId = $request->user()->tenant_id;
         $query = Staff::with(['user', 'branch']);
-        if ($tenantId) {
-            $query->where('tenant_id', $tenantId);
-        }
 
         // Search filter
         if ($request->filled('search')) {
