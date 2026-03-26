@@ -64,8 +64,9 @@ return [
         // Expenses above this amount require approval
         'expense' => env('APPROVAL_THRESHOLD_EXPENSE', 50000),
 
-        // Inventory adjustments above this quantity require approval
-        'inventory_adjustment' => env('APPROVAL_THRESHOLD_INVENTORY', 100),
+        // Inventory adjustments above this quantity require approval.
+        // Use a high default so operational stock counts are not blocked by approval.
+        'inventory_adjustment' => env('APPROVAL_THRESHOLD_INVENTORY', 1000000),
 
         // Credit limit changes above this amount require approval
         'credit_limit_change' => env('APPROVAL_THRESHOLD_CREDIT', 500000),

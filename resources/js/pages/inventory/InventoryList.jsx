@@ -320,8 +320,8 @@ export default function InventoryList() {
 
     const handleAdjustment = async () => {
         try {
-            await inventoryAPI.createAdjustment(adjustForm);
-            toast.success('Stock adjustment submitted. Awaiting approval.');
+            const response = await inventoryAPI.createAdjustment(adjustForm);
+            toast.success(response?.message || 'Stock adjustment processed successfully.');
             setShowAdjustment(false);
             setAdjustForm({ product_id: '', warehouse_id: '', adjustment_type: 'count_correction', quantity_change: '', reason: '' });
             fetchInventory(); // Refresh data
