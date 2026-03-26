@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Button from '../../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardBody } from '../../components/ui/Card';
 import Modal from '../../components/ui/Modal';
@@ -9,6 +9,7 @@ import posAPI from '../../services/posAPI';
 import { taxesAPI, bankAccountsAPI, saleChargesAPI, saleCategoriesAPI } from '../../services/settingsAPI';
 import OpenRegisterModal from './OpenRegisterModal';
 import CloseRegisterModal from './CloseRegisterModal';
+import { loadPrintSettings, printReceipt as doPrintReceipt } from '../../utils/receiptPrint';
 
 export default function POSTerminal() {
     // Register Session State
@@ -56,6 +57,9 @@ export default function POSTerminal() {
     // Sale categories (2mm, 3mm, 4mm…)
     const [saleCategories, setSaleCategories] = useState([]);
     const [selectedSaleCategoryId, setSelectedSaleCategoryId] = useState('');
+
+    // Print settings (loaded once alongside POS data)
+    const printSettingsRef = useRef(null);
 
     const toast = useToast();
     const confirm = useConfirm();
@@ -120,7 +124,8 @@ export default function POSTerminal() {
                 taxesAPI.list(),
                 bankAccountsAPI.list(),
                 saleChargesAPI.list({ context: 'pos', active_only: true }),
-                saleCategoriesAPI.list()
+                saleCategoriesAPI.list(),
+                loadPrintSettings(true),
             ]);
             
             setProducts(productsRes.data || []);
@@ -146,6 +151,10 @@ export default function POSTerminal() {
             // Load sale categories
             const catData = saleCatRes.data?.data || [];
             setSaleCategories(Array.isArray(catData) ? catData.filter(c => c.is_active) : []);
+
+            // Print settings are preloaded into the module cache by loadPrintSettings() above
+            // (printSettingsRef kept for any component that needs a synchronous peek)
+            printSettingsRef.current = await loadPrintSettings();
 
             // Set default cash booking customer
             const walkIn = customersRes.data?.find(c => c.customer_type === 'walk-in');
@@ -480,6 +489,12 @@ export default function POSTerminal() {
                 setShowPaymentModal(false);
                 setShowReceiptModal(true);
                 toast.success('Sale completed successfully!');
+
+                // Auto-print if setting is enabled
+                const s = await loadPrintSettings();
+                if (s.auto_print_pos) {
+                    doPrintReceipt(receiptData).catch(err => console.error('Auto-print error:', err));
+                }
                 
                 // Refresh products to update stock
                 fetchProducts(selectedCategory, searchQuery);
@@ -592,252 +607,32 @@ export default function POSTerminal() {
 
     const printReceipt = () => {
         if (!lastReceipt) return;
-        
-        // Create thermal printer receipt (58mm width = ~32 characters)
-        const receiptWidth = '58mm';
-        const charWidth = 32;
-        
-        const line = (char = '-') => char.repeat(charWidth);
-        const center = (text) => {
-            const padding = Math.max(0, Math.floor((charWidth - text.length) / 2));
-            return ' '.repeat(padding) + text;
-        };
-        const leftRight = (left, right) => {
-            const spaces = Math.max(1, charWidth - left.length - right.length);
-            return left + ' '.repeat(spaces) + right;
-        };
-        const formatCurrency = (amount) => window.formatCurrency(amount, { minimumFractionDigits: 0 });
-        
-        let receipt = '';
-        
-        // Header
-        receipt += center('FactoryPulse') + '\n';
-        receipt += center('Sales Receipt') + '\n';
-        receipt += center(lastReceipt.id || '') + '\n';
-        receipt += line() + '\n';
-        
-        // Date & Customer
-        receipt += `Date: ${lastReceipt.date}\n`;
-        receipt += `Customer: ${lastReceipt.customer?.name || 'Cash Booking'}\n`;
-        if (lastReceipt.customer?.phone) {
-            receipt += `Phone: ${lastReceipt.customer.phone}\n`;
-        }
-        if (lastReceipt.saleCategory) {
-            receipt += `Category: ${lastReceipt.saleCategory}\n`;
-        }
-        receipt += line() + '\n';
-        
-        // Items
-        (lastReceipt.items || []).forEach(item => {
-            const itemName = item.name.length > 20 ? item.name.substring(0, 20) + '..' : item.name;
-            const itemTotal = formatCurrency(item.price * item.quantity);
-            receipt += `${itemName} x${item.quantity}\n`;
-            receipt += leftRight('', itemTotal) + '\n';
+        doPrintReceipt(lastReceipt).catch(err => {
+            console.error('Print error:', err);
+            toast.error(err.message || 'Print failed');
         });
-        
-        receipt += line() + '\n';
-        
-        // Totals
-        receipt += leftRight('Subtotal:', formatCurrency(lastReceipt.subtotal)) + '\n';
-        
-        if (lastReceipt.discount > 0) {
-            receipt += leftRight('Discount:', '-' + formatCurrency(lastReceipt.discount)) + '\n';
-        }
-        
-        if (lastReceipt.tax > 0) {
-            const taxLabel = lastReceipt.taxName || 'Tax';
-            receipt += leftRight(taxLabel + ':', formatCurrency(lastReceipt.tax)) + '\n';
-        }
-        
-        (lastReceipt.charges || []).forEach(c => {
-            const label = c.name.length > 20 ? c.name.substring(0, 20) + '..' : c.name;
-            receipt += leftRight(label + ':', formatCurrency(c.amount)) + '\n';
-        });
-        
-        receipt += line('=') + '\n';
-        receipt += leftRight('TOTAL:', formatCurrency(lastReceipt.total)) + '\n';
-        receipt += line('=') + '\n';
-        
-        // Payment Info
-        receipt += leftRight('Payment:', (lastReceipt.paymentMethod || '').toUpperCase()) + '\n';
-        
-        if (lastReceipt.paymentMethod === 'cash') {
-            receipt += leftRight('Received:', formatCurrency(lastReceipt.amountReceived)) + '\n';
-            receipt += leftRight('Change:', formatCurrency(lastReceipt.change)) + '\n';
-        }
-        
-        if (lastReceipt.paymentMethod === 'transfer' && lastReceipt.bankAccountName) {
-            receipt += `Bank: ${lastReceipt.bankAccountName}\n`;
-        }
-        
-        receipt += line() + '\n';
-        receipt += center('Thank you for your') + '\n';
-        receipt += center('business!') + '\n';
-        receipt += '\n\n\n'; // Extra lines for paper cutting
-        
-        // Create print window optimized for thermal printer
-        const printWindow = window.open('', '_blank', 'width=300,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Receipt - ${lastReceipt.id}</title>
-                <style>
-                    @page {
-                        size: ${receiptWidth} auto;
-                        margin: 0;
-                    }
-                    body {
-                        font-family: 'Courier New', Courier, monospace;
-                        font-size: 12px;
-                        line-height: 1.3;
-                        margin: 0;
-                        padding: 4mm;
-                        width: ${receiptWidth};
-                        background: white;
-                    }
-                    pre {
-                        margin: 0;
-                        white-space: pre-wrap;
-                        word-break: break-all;
-                    }
-                    @media print {
-                        body { 
-                            width: ${receiptWidth};
-                            padding: 2mm;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <pre>${receipt}</pre>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-        
-        // Auto-trigger print dialog
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-        }, 250);
-        
-        toast.success('Receipt sent to printer');
     };
 
     const printTicket = () => {
         if (!lastTicket) return;
-        
-        // Create thermal printer ticket (58mm width = ~32 characters)
-        const receiptWidth = '58mm';
-        const charWidth = 32;
-        
-        const line = (char = '-') => char.repeat(charWidth);
-        const center = (text) => {
-            const padding = Math.max(0, Math.floor((charWidth - text.length) / 2));
-            return ' '.repeat(padding) + text;
-        };
-        const leftRight = (left, right) => {
-            const spaces = Math.max(1, charWidth - left.length - right.length);
-            return left + ' '.repeat(spaces) + right;
-        };
-        const formatCurrency = (amount) => window.formatCurrency(amount, { minimumFractionDigits: 0 });
-        
-        let ticket = '';
-        
-        // Header
-        ticket += center('FactoryPulse') + '\n';
-        ticket += center('** ORDER TICKET **') + '\n';
-        ticket += center(lastTicket.ticketNumber || '') + '\n';
-        ticket += line() + '\n';
-        
-        // Date & Customer
-        ticket += `Date: ${lastTicket.date}\n`;
-        ticket += `Customer: ${lastTicket.customer?.name || 'Cash Booking'}\n`;
-        if (lastTicket.customer?.phone) {
-            ticket += `Phone: ${lastTicket.customer.phone}\n`;
-        }
-        ticket += line() + '\n';
-        
-        // Items
-        (lastTicket.items || []).forEach(item => {
-            const itemName = item.name.length > 20 ? item.name.substring(0, 20) + '..' : item.name;
-            const itemTotal = formatCurrency(item.price * item.quantity);
-            ticket += `${itemName} x${item.quantity}\n`;
-            ticket += leftRight('', itemTotal) + '\n';
+        // Build a ticket-style receipt (pending payment) using the shared utility
+        doPrintReceipt({
+            id: lastTicket.ticketNumber,
+            date: lastTicket.date,
+            customer: lastTicket.customer,
+            items: lastTicket.items,
+            subtotal: lastTicket.subtotal,
+            discount: lastTicket.discount,
+            tax: lastTicket.tax,
+            taxName: lastTicket.taxName,
+            charges: lastTicket.charges,
+            total: lastTicket.total,
+            paymentMethod: '** PENDING PAYMENT **',
+            _isTicket: true,
+        }).catch(err => {
+            console.error('Ticket print error:', err);
+            toast.error(err.message || 'Print failed');
         });
-        
-        ticket += line() + '\n';
-        
-        // Totals
-        ticket += leftRight('Subtotal:', formatCurrency(lastTicket.subtotal)) + '\n';
-        
-        if (lastTicket.discount > 0) {
-            ticket += leftRight('Discount:', '-' + formatCurrency(lastTicket.discount)) + '\n';
-        }
-        
-        if (lastTicket.tax > 0) {
-            const taxLabel = lastTicket.taxName || 'Tax';
-            ticket += leftRight(taxLabel + ':', formatCurrency(lastTicket.tax)) + '\n';
-        }
-        
-        ticket += line('=') + '\n';
-        ticket += leftRight('TOTAL DUE:', formatCurrency(lastTicket.total)) + '\n';
-        ticket += line('=') + '\n';
-        
-        ticket += '\n';
-        ticket += center('** PENDING PAYMENT **') + '\n';
-        ticket += center('Order saved. Pay anytime.') + '\n';
-        ticket += '\n\n\n'; // Extra lines for paper cutting
-        
-        // Create print window optimized for thermal printer
-        const printWindow = window.open('', '_blank', 'width=300,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Ticket - ${lastTicket.ticketNumber}</title>
-                <style>
-                    @page {
-                        size: ${receiptWidth} auto;
-                        margin: 0;
-                    }
-                    body {
-                        font-family: 'Courier New', Courier, monospace;
-                        font-size: 12px;
-                        line-height: 1.3;
-                        margin: 0;
-                        padding: 4mm;
-                        width: ${receiptWidth};
-                        background: white;
-                    }
-                    pre {
-                        margin: 0;
-                        white-space: pre-wrap;
-                        word-break: break-all;
-                    }
-                    @media print {
-                        body { 
-                            width: ${receiptWidth};
-                            padding: 2mm;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <pre>${ticket}</pre>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-        
-        // Auto-trigger print dialog
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-        }, 250);
-        
-        toast.success('Ticket sent to printer');
     };
 
     const getStockBadge = (product) => {
