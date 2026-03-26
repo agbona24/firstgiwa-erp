@@ -851,7 +851,9 @@ export default function POSTerminal() {
                         const isBlocked = selectedCustomer?.credit_blocked;
                         const usedPct = creditLimit > 0 ? (outstanding / creditLimit) * 100 : 0;
                         const hasCreditFacility = selectedCustomer && creditLimit > 0;
-                        const showStrip = saleCategories.length > 0 || hasCreditFacility;
+                        const walletBal = parseFloat(selectedCustomer?.wallet_balance) || 0;
+                        const hasWallet = selectedCustomer && walletBal > 0;
+                        const showStrip = saleCategories.length > 0 || hasCreditFacility || hasWallet;
                         const fmt = (v) => window.formatCurrency(v, { minimumFractionDigits: 0 });
 
                         if (!showStrip) return null;
@@ -938,6 +940,28 @@ export default function POSTerminal() {
                                         )}
                                     </div>
                                 )}
+
+                                {/* Divider before wallet */}
+                                {hasWallet && (hasCreditFacility || saleCategories.length > 0) && (
+                                    <div className="w-px self-stretch bg-slate-200 hidden sm:block" />
+                                )}
+
+                                {/* Wallet Balance */}
+                                {hasWallet && (
+                                    <div className="flex items-center gap-4 flex-shrink-0">
+                                        <div className="flex items-center gap-1.5 text-slate-500 flex-shrink-0">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                            </svg>
+                                            <span className="text-xs font-bold uppercase tracking-wide">Wallet</span>
+                                        </div>
+                                        <div className="px-3 py-1 rounded-lg bg-white border border-green-200">
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide leading-none mb-1">Balance</p>
+                                            <p className="text-base font-extrabold text-green-600">{fmt(walletBal)}</p>
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
                         );
                     })()}

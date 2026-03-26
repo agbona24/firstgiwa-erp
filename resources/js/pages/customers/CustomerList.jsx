@@ -257,7 +257,9 @@ export default function CustomerList() {
         setShowWalletHistory(true);
         try {
             const res = await customerAPI.getWalletTransactions(customer.id);
-            setWalletHistory(res.data || []);
+            // Handle paginated response: { data: { data: [...] } } or flat array
+            const list = res?.data?.data || res?.data || [];
+            setWalletHistory(Array.isArray(list) ? list : []);
         } catch (error) {
             console.error('Error fetching wallet history:', error);
             toast.error('Failed to load wallet history');
@@ -283,12 +285,12 @@ export default function CustomerList() {
     };
 
     const actions = [
-        { label: 'View', onClick: (row) => setSelectedCustomer(row), variant: 'outline' },
-        { label: 'Edit', onClick: (row) => handleEdit(row), variant: 'ghost' },
+        { label: 'View Details', onClick: (row) => setSelectedCustomer(row), variant: 'info' },
+        { label: 'Edit', onClick: (row) => handleEdit(row), variant: 'warning' },
+        { label: 'Manage Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, variant: 'info', show: (row) => creditEnabledTypes.includes(row.customer_type) },
+        { label: 'Top Up Wallet', onClick: (row) => { setTopUpCustomer(row); setTopUpForm({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' }); setShowTopUp(true); }, variant: 'success' },
+        { label: 'Wallet Log', onClick: (row) => handleViewWalletHistory(row), variant: 'info' },
         { label: 'Delete', onClick: (row) => setDeleteConfirm({ isOpen: true, customer: row }), variant: 'danger' },
-        { label: 'Manage Credit', onClick: (row) => { setCreditForm({ credit_limit: row.credit_limit || '', payment_terms_days: row.payment_terms_days || '', reason: '' }); setShowCreditMgmt(row); }, dropdown: true, show: (row) => creditEnabledTypes.includes(row.customer_type) },
-        { label: 'Top Up Wallet', onClick: (row) => { setTopUpCustomer(row); setTopUpForm({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' }); setShowTopUp(true); }, dropdown: true },
-        { label: 'Wallet Log', onClick: (row) => handleViewWalletHistory(row), dropdown: true },
     ];
 
     // Bulk Actions

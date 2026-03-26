@@ -60,7 +60,7 @@ class CustomerWalletController extends Controller
                 'payable_type'          => Customer::class,
                 'payable_id'            => $customer->id,
                 'customer_id'           => $customer->id,
-                'payment_type'          => 'wallet_deposit',
+                'payment_type'          => 'receivable',
                 'payment_method'        => $request->payment_method,
                 'bank_account_id'       => $request->bank_account_id,
                 'amount'                => $amount,

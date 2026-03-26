@@ -1,42 +1,63 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import EmptyState from './EmptyState';
-import Button from './Button';
 
-function ActionDropdown({ actions, row }) {
-    const [open, setOpen] = useState(false);
-    const ref = useRef(null);
-    useEffect(() => {
-        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
+function ActionDropdown({ actions, row, openId, setOpenId }) {
+    const id = row.id ?? row._idx;
+    const open = openId === id;
     const visible = actions.filter(a => !a.show || a.show(row));
     if (visible.length === 0) return null;
     return (
-        <div className="relative" ref={ref}>
+        <div className="relative">
             <button
-                onClick={() => setOpen(o => !o)}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
-                title="More actions"
+                onClick={(e) => { e.stopPropagation(); setOpenId(open ? null : id); }}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium text-sm flex items-center gap-1"
             >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
+                Actions
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
             {open && (
-                <div className="absolute right-0 z-50 mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
-                    {visible.map((action, i) => (
-                        <button
-                            key={i}
-                            onClick={() => { setOpen(false); action.onClick(row); }}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition ${
-                                action.variant === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-slate-700'
-                            }`}
-                        >
-                            {typeof action.label === 'function' ? action.label(row) : action.label}
-                        </button>
-                    ))}
-                </div>
+                <>
+                    <div className="fixed inset-0 z-40" onClick={() => setOpenId(null)}></div>
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1 min-w-[180px]">
+                        {visible.map((action, i) => {
+                            const label = typeof action.label === 'function' ? action.label(row) : action.label;
+                            const variant = typeof action.variant === 'function' ? action.variant(row) : action.variant;
+                            const prevAction = visible[i - 1];
+                            const prevVariant = prevAction ? (typeof prevAction.variant === 'function' ? prevAction.variant(row) : prevAction.variant) : null;
+                            const showDivider = i > 0 && variant === 'danger' && prevVariant !== 'danger';
+
+                            const variantStyles = {
+                                danger:  'text-red-600 hover:bg-red-50',
+                                info:    'text-blue-600 hover:bg-blue-50',
+                                success: 'text-green-600 hover:bg-green-50',
+                                warning: 'text-amber-600 hover:bg-amber-50',
+                            };
+                            const dotColors = {
+                                danger:  'bg-red-400',
+                                info:    'bg-blue-400',
+                                success: 'bg-green-400',
+                                warning: 'bg-amber-400',
+                            };
+                            const textClass = variantStyles[variant] || 'text-slate-700 hover:bg-slate-50';
+                            const dotClass = dotColors[variant];
+
+                            return (
+                                <div key={i}>
+                                    {showDivider && <div className="border-t border-slate-100 my-1" />}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setOpenId(null); action.onClick(row); }}
+                                        className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 font-medium ${textClass}`}
+                                    >
+                                        {dotClass && <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
+                                        {label}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
             )}
         </div>
     );
@@ -60,6 +81,7 @@ export default function DataTable({
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(initialPageSize);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+    const [openActionMenu, setOpenActionMenu] = useState(null);
 
     // Sorting logic
     const sortedData = useMemo(() => {
@@ -254,27 +276,8 @@ export default function DataTable({
                                         </td>
                                     ))}
                                     {actions && actions.length > 0 && (
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex items-center gap-2">
-                                                {actions.filter(a => !a.dropdown).map((action, actionIdx) => {
-                                                    if (action.show && typeof action.show === 'function' && !action.show(row)) {
-                                                        return null;
-                                                    }
-                                                    return (
-                                                        <Button
-                                                            key={actionIdx}
-                                                            size="sm"
-                                                            variant={typeof action.variant === 'function' ? action.variant(row) : (action.variant || 'ghost')}
-                                                            onClick={() => action.onClick(row)}
-                                                        >
-                                                            {typeof action.label === 'function' ? action.label(row) : action.label}
-                                                        </Button>
-                                                    );
-                                                })}
-                                                {actions.some(a => a.dropdown) && (
-                                                    <ActionDropdown actions={actions.filter(a => a.dropdown)} row={row} />
-                                                )}
-                                            </div>
+                                        <td className="px-4 py-4 whitespace-nowrap text-sm" onClick={(e) => e.stopPropagation()}>
+                                            <ActionDropdown actions={actions} row={row} openId={openActionMenu} setOpenId={setOpenActionMenu} />
                                         </td>
                                     )}
                                 </tr>
