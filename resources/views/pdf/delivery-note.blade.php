@@ -4,9 +4,10 @@
     <meta charset="utf-8">
     <title>Delivery Note #{{ $deliveryNote->dn_number ?? $salesOrder->order_number }}</title>
     <style>
+        @page { size: A4; margin: 15mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1e293b; line-height: 1.4; }
-        .container { padding: 30px; max-width: 800px; margin: 0 auto; }
+        .container { padding: 30px; max-width: 100%; margin: 0 auto; }
         
         /* Header */
         .header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 3px solid #7c3aed; padding-bottom: 20px; }

@@ -5,9 +5,10 @@
     <meta charset="utf-8">
     <title>Cash/Sales Invoice #{{ $salesOrder->order_number ?? $salesOrder->id }}</title>
     <style>
+        @page { size: A4; margin: 15mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; font-size: 11px; color: #000; background: #fff; }
-        .page { padding: 18px 22px; max-width: 780px; margin: 0 auto; }
+        .page { padding: 18px 22px; max-width: 100%; margin: 0 auto; }
 
         /* ── HEADER ── */
         .header { display: table; width: 100%; margin-bottom: 8px; }

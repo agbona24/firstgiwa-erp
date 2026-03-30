@@ -116,9 +116,11 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
         logo_url: localStorage.getItem('company_logo_url') || '',
     };
 
-    // Paper width
-    const widthMap = { '58mm': '200px', '80mm': '280px', 'A4': '595px' };
-    const width = widthMap[s.receipt_paper_size] || '280px';
+    // Paper width - FORCED to A4 for now (thermal/POS printer support disabled)
+    // To re-enable POS printer, uncomment the line below:
+    // const widthMap = { '58mm': '200px', '80mm': '280px', 'A4': '595px' };
+    // const width = widthMap[s.receipt_paper_size] || '280px';
+    const width = '210mm'; // A4 width
 
     const bool = (key, def = true) => (key in s ? !!s[key] : def);
 
@@ -255,19 +257,22 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Receipt – ${escHtml(String(data.id || ''))}</title>
 <style>
-  @page { size: ${width} auto; margin: 0; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.4;
-         margin: 0; padding: 4mm; width: ${width}; background: #fff; }
+  @page { size: A4; margin: 20mm; }
+  body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;
+         margin: 0; padding: 20mm; width: ${width}; max-width: 210mm; background: #fff; }
   .center { text-align: center; }
   .bold { font-weight: 700; }
-  .lg { font-size: 14px; }
+  .lg { font-size: 18px; }
   .muted { color: #555; }
-  .row { display: flex; justify-content: space-between; }
-  .barcode { font-size: 10px; letter-spacing: 3px; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; }
+  .barcode { font-size: 12px; letter-spacing: 3px; }
   .divider::before { content: attr(data-char, '-'); display: block;
-                     border-top: 1px ${(s.receipt_paper_size === 'A4') ? 'solid' : 'dashed'} #999;
-                     margin: 5px 0; }
-  @media print { body { width: ${width}; padding: 2mm; } }
+                     border-top: 1px solid #999;
+                     margin: 10px 0; }
+  @media print {
+    @page { size: A4; margin: 15mm; }
+    body { width: 100%; padding: 0; font-size: 12px; }
+  }
 </style></head>
 <body>${body}</body></html>`;
 }
@@ -314,9 +319,9 @@ export async function printReceipt(receiptData, opts = {}) {
         }
     }
 
-    // Browser popup fallback
-    const width = settings.receipt_paper_size === 'A4' ? 640 : 380;
-    const win = window.open('', '_blank', `width=${width},height=700`);
+    // Browser popup fallback - A4 size
+    const width = 850; // A4 width in pixels at 96dpi
+    const win = window.open('', '_blank', `width=${width},height=900`);
     if (!win) {
         throw new Error('Popup blocked. Allow popups and try again.');
     }

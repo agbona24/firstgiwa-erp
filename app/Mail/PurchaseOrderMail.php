@@ -71,7 +71,7 @@ class PurchaseOrderMail extends Mailable
             'supplier' => $this->purchaseOrder->supplier,
             'items' => $this->purchaseOrder->items,
             'logoBase64' => $logoBase64,
-        ]);
+        ])->setPaper('a4');
 
         return [
             Attachment::fromData(fn() => $pdf->output(), "PO-{$this->purchaseOrder->po_number}.pdf")

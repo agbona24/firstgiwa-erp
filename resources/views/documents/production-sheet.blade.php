@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>Production Sheet - {{ $run->production_number }}</title>
     <style>
+        @page { size: A4; margin: 15mm; }
         * {
             margin: 0;
             padding: 0;

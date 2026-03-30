@@ -36,7 +36,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['salesOrder'] = $salesOrder;
         $data['previousBalance'] = $this->getCustomerPreviousBalance($salesOrder);
         
-        $pdf = Pdf::loadView('pdf.invoice', $data);
+        $pdf = Pdf::loadView('pdf.invoice', $data)->setPaper('a4');
 
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
         return $pdf->download("Invoice-{$orderNumber}.pdf");
@@ -53,7 +53,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['salesOrder'] = $salesOrder;
         $data['previousBalance'] = $this->getCustomerPreviousBalance($salesOrder);
 
-        $pdf = Pdf::loadView('pdf.invoice', $data);
+        $pdf = Pdf::loadView('pdf.invoice', $data)->setPaper('a4');
 
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
         return $pdf->stream("Invoice-{$orderNumber}.pdf");
@@ -71,7 +71,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['balance'] = $payment->payable ? 
             ($payment->payable->total_amount - ($payment->payable->amount_paid ?? 0)) : 0;
         
-        $pdf = Pdf::loadView('pdf.receipt', $data);
+        $pdf = Pdf::loadView('pdf.receipt', $data)->setPaper('a4');
         
         $reference = $payment->reference ?? $payment->payment_reference ?? $payment->id;
         return $pdf->download("Receipt-{$reference}.pdf");
@@ -89,7 +89,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['balance'] = $payment->payable ? 
             ($payment->payable->total_amount - ($payment->payable->amount_paid ?? 0)) : 0;
         
-        $pdf = Pdf::loadView('pdf.receipt', $data);
+        $pdf = Pdf::loadView('pdf.receipt', $data)->setPaper('a4');
         
         $reference = $payment->reference ?? $payment->payment_reference ?? $payment->id;
         return $pdf->stream("Receipt-{$reference}.pdf");
@@ -111,7 +111,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
             'phone' => null,
         ];
         
-        $pdf = Pdf::loadView('pdf.delivery-note', $data);
+        $pdf = Pdf::loadView('pdf.delivery-note', $data)->setPaper('a4');
         
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
         return $pdf->download("DN-{$orderNumber}.pdf");
@@ -133,7 +133,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
             'phone' => null,
         ];
         
-        $pdf = Pdf::loadView('pdf.delivery-note', $data);
+        $pdf = Pdf::loadView('pdf.delivery-note', $data)->setPaper('a4');
         
         $orderNumber = $salesOrder->order_number ?? $salesOrder->so_number ?? $salesOrder->id;
         return $pdf->stream("DN-{$orderNumber}.pdf");
@@ -151,7 +151,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['grn'] = null; // Can be extended with GRN model
         $data['conditionNotes'] = null;
         
-        $pdf = Pdf::loadView('pdf.grn', $data);
+        $pdf = Pdf::loadView('pdf.grn', $data)->setPaper('a4');
         
         return $pdf->download("GRN-{$purchaseOrder->po_number}.pdf");
     }
@@ -168,7 +168,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['grn'] = null;
         $data['conditionNotes'] = null;
         
-        $pdf = Pdf::loadView('pdf.grn', $data);
+        $pdf = Pdf::loadView('pdf.grn', $data)->setPaper('a4');
         
         return $pdf->stream("GRN-{$purchaseOrder->po_number}.pdf");
     }
@@ -198,7 +198,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['netPayInWords'] = $this->numberToWords($payrollItem->net_pay ?? $payrollItem->net_amount ?? 0);
         $data['ytdSummary'] = $this->getYtdSummary($staff, $payrollRun);
         
-        $pdf = Pdf::loadView('pdf.payslip', $data);
+        $pdf = Pdf::loadView('pdf.payslip', $data)->setPaper('a4');
         
         $employeeId = $staff->employee_id ?? $staff->id;
         return $pdf->download("Payslip-{$employeeId}-{$payrollRun->id}.pdf");
@@ -214,7 +214,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data = $this->getCommonData('Production Sheet');
         $data['run'] = $productionRun;
         
-        $pdf = Pdf::loadView('documents.production-sheet', $data);
+        $pdf = Pdf::loadView('documents.production-sheet', $data)->setPaper('a4');
         
         return $pdf->download("Production-Sheet-{$productionRun->production_number}.pdf");
     }
@@ -229,7 +229,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data = $this->getCommonData('Production Sheet');
         $data['run'] = $productionRun;
         
-        $pdf = Pdf::loadView('documents.production-sheet', $data);
+        $pdf = Pdf::loadView('documents.production-sheet', $data)->setPaper('a4');
         
         return $pdf->stream("Production-Sheet-{$productionRun->production_number}.pdf");
     }
@@ -259,7 +259,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         $data['netPayInWords'] = $this->numberToWords($payrollItem->net_pay ?? $payrollItem->net_amount ?? 0);
         $data['ytdSummary'] = $this->getYtdSummary($staff, $payrollRun);
         
-        $pdf = Pdf::loadView('pdf.payslip', $data);
+        $pdf = Pdf::loadView('pdf.payslip', $data)->setPaper('a4');
         
         $employeeId = $staff->employee_id ?? $staff->id;
         return $pdf->stream("Payslip-{$employeeId}-{$payrollRun->id}.pdf");
@@ -491,7 +491,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
             'formula' => null,
         ];
         
-        $pdf = Pdf::loadView('pdf.invoice', $data);
+        $pdf = Pdf::loadView('pdf.invoice', $data)->setPaper('a4');
         return $pdf->stream("Invoice-Preview.pdf");
     }
 
@@ -529,7 +529,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         ];
         $data['balance'] = 61250;
         
-        $pdf = Pdf::loadView('pdf.receipt', $data);
+        $pdf = Pdf::loadView('pdf.receipt', $data)->setPaper('a4');
         return $pdf->stream("Receipt-Preview.pdf");
     }
 
@@ -578,7 +578,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
             'phone' => '08098765432',
         ];
         
-        $pdf = Pdf::loadView('pdf.delivery-note', $data);
+        $pdf = Pdf::loadView('pdf.delivery-note', $data)->setPaper('a4');
         return $pdf->stream("DeliveryNote-Preview.pdf");
     }
 
@@ -629,7 +629,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
         ];
         $data['conditionNotes'] = '2 bags of Soybean Meal damaged during transit. Supplier notified.';
         
-        $pdf = Pdf::loadView('pdf.grn', $data);
+        $pdf = Pdf::loadView('pdf.grn', $data)->setPaper('a4');
         return $pdf->stream("GRN-Preview.pdf");
     }
 
@@ -685,7 +685,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
             'net' => 167000,
         ];
         
-        $pdf = Pdf::loadView('pdf.payslip', $data);
+        $pdf = Pdf::loadView('pdf.payslip', $data)->setPaper('a4');
         return $pdf->stream("Payslip-Preview.pdf");
     }
 
@@ -750,7 +750,7 @@ $salesOrder->load(['customer', 'items.product', 'formula', 'creator', 'charges',
             ],
         ]);
         
-        $pdf = Pdf::loadView('pdf.purchase-order', $data);
+        $pdf = Pdf::loadView('pdf.purchase-order', $data)->setPaper('a4');
         return $pdf->stream("PurchaseOrder-Preview.pdf");
     }
 }
