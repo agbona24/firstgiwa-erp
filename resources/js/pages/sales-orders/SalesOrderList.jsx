@@ -176,6 +176,7 @@ export default function SalesOrderList() {
                     product: item.product?.name || item.product_name || 'Unknown Product',
                     quantity: item.quantity || 0,
                     price: parseFloat(item.unit_price) || 0,
+                    unit: item.product?.unit_of_measure || item.unit || null,
                     total: parseFloat(item.line_total || item.total_amount) || (item.quantity * parseFloat(item.unit_price)) || 0
                 })),
                 charges: (order.charges || []).map(c => ({
@@ -587,6 +588,7 @@ export default function SalesOrderList() {
                     sku: i.sku,
                     quantity: i.quantity ?? 1,
                     price: i.price ?? i.unit_price ?? 0,
+                    unit: i.unit || i.unit_of_measure || null,
                 })),
                 subtotal: order.subtotal ?? order.total,
                 discount: order.discount_amount ?? 0,
