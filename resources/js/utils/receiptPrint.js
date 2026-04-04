@@ -266,6 +266,15 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
   .totals-table tr.grand-total td:first-child { border-radius: 6px 0 0 6px; }
   .totals-table tr.grand-total td:last-child  { border-radius: 0 6px 6px 0; font-size: 16px; }
 
+  /* ── Items Brought by Customer ── */
+  .brought-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+                 padding: 14px 16px; margin-bottom: 20px; }
+  .brought-box .brought-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                                letter-spacing: 0.8px; color: #92400e; margin-bottom: 8px; }
+  .brought-table { width: 100%; border-collapse: collapse; }
+  .brought-table td { padding: 4px 6px; font-size: 12.5px; color: #78350f; }
+  .brought-table td:last-child { text-align: right; font-weight: 600; }
+
   /* ── Payment section ── */
   .pay-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
              padding: 14px 16px; margin-bottom: 20px; }
@@ -327,6 +336,16 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
   </table>
 
   ${payRows ? `<div class="pay-box"><table class="pay-table">${payRows}</table></div>` : ''}
+
+  ${(data.customerItems || []).filter(r => r.name).length > 0 ? `
+  <div class="brought-box">
+    <div class="brought-title">Items Brought by Customer</div>
+    <table class="brought-table">
+      ${(data.customerItems).filter(r => r.name).map(r =>
+        `<tr><td>${escHtml(r.name)}</td><td>${escHtml(String(r.quantity || ''))}</td></tr>`
+      ).join('')}
+    </table>
+  </div>` : ''}
 
   ${barcodeHtml}
 

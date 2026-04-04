@@ -58,6 +58,16 @@ export default function POSTerminal() {
     const [saleCategories, setSaleCategories] = useState([]);
     const [selectedSaleCategoryId, setSelectedSaleCategoryId] = useState('');
 
+    // Items Brought by customer (for crushing / mixing)
+    const [customerItems, setCustomerItems] = useState([{ name: '', quantity: '' }]);
+
+    const addCustomerItemRow = () => setCustomerItems(prev => [...prev, { name: '', quantity: '' }]);
+    const updateCustomerItem = (idx, field, value) =>
+        setCustomerItems(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    const removeCustomerItemRow = (idx) =>
+        setCustomerItems(prev => prev.length === 1 ? [{ name: '', quantity: '' }] : prev.filter((_, i) => i !== idx));
+    const filledCustomerItems = () => customerItems.filter(r => r.name.trim());
+
     // Print settings + company info (loaded once alongside POS data)
     const printSettingsRef = useRef(null);
     const companyInfoRef = useRef({});
@@ -501,12 +511,17 @@ export default function POSTerminal() {
                 if (selectedTax && receiptData) {
                     receiptData.taxName = `${selectedTax.name} (${taxRate * 100}%)`;
                 }
+                // Attach customer items to receipt
+                if (receiptData) {
+                    receiptData.customerItems = filledCustomerItems();
+                }
                 setLastReceipt(receiptData);
                 setCart([]);
                 setDiscount(0);
                 setAmountReceived('');
                 setSelectedCharges([]);
                 setSelectedSaleCategoryId('');
+                setCustomerItems([{ name: '', quantity: '' }]);
                 setShowPaymentModal(false);
                 setShowReceiptModal(true);
                 toast.success('Sale completed successfully!');
@@ -1096,6 +1111,52 @@ export default function POSTerminal() {
                                 )}
                             </div>
 
+                            {/* Items Brought by Customer */}
+                            <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 mb-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Items Brought by Customer</span>
+                                    <button
+                                        type="button"
+                                        onClick={addCustomerItemRow}
+                                        className="text-xs text-amber-700 hover:text-amber-900 font-medium flex items-center gap-1"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Add Row
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    {customerItems.map((row, idx) => (
+                                        <div key={idx} className="flex gap-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={row.name}
+                                                onChange={e => updateCustomerItem(idx, 'name', e.target.value)}
+                                                placeholder="Item name"
+                                                className="flex-1 px-2 py-1.5 text-sm border border-amber-300 rounded focus:border-amber-500 focus:outline-none bg-white"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={row.quantity}
+                                                onChange={e => updateCustomerItem(idx, 'quantity', e.target.value)}
+                                                placeholder="Qty"
+                                                className="w-20 px-2 py-1.5 text-sm border border-amber-300 rounded focus:border-amber-500 focus:outline-none bg-white text-center"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeCustomerItemRow(idx)}
+                                                className="text-red-400 hover:text-red-600"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
                             {/* Discount & Tax */}
                             {cart.length > 0 && (
                                 <div className="mb-4 pb-4 border-b-2 border-slate-200 space-y-3">
@@ -1558,6 +1619,18 @@ export default function POSTerminal() {
                                     <span className="font-mono">{window.getCurrencySymbol()}{lastReceipt.total.toLocaleString()}</span>
                                 </div>
                             </div>
+
+                            {(lastReceipt.customerItems || []).filter(r => r.name).length > 0 && (
+                                <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 mb-3">
+                                    <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">Items Brought by Customer</p>
+                                    {lastReceipt.customerItems.filter(r => r.name).map((r, i) => (
+                                        <div key={i} className="flex justify-between text-sm">
+                                            <span className="text-amber-900">{r.name}</span>
+                                            <span className="font-medium text-amber-900">{r.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="border-t border-slate-300 mt-3 pt-3 space-y-1">
                                 <div className="flex justify-between text-sm">
