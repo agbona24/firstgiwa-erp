@@ -116,165 +116,226 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
         logo_url: localStorage.getItem('company_logo_url') || '',
     };
 
-    // Paper width - FORCED to A4 for now (thermal/POS printer support disabled)
-    // To re-enable POS printer, uncomment the line below:
-    // const widthMap = { '58mm': '200px', '80mm': '280px', 'A4': '595px' };
-    // const width = widthMap[s.receipt_paper_size] || '280px';
-    const width = '210mm'; // A4 width
-
     const bool = (key, def = true) => (key in s ? !!s[key] : def);
 
-    const row = (l, r) => `<div class="row"><span>${l}</span><span>${r}</span></div>`;
-    const divider = (char = '-') => `<div class="divider" data-char="${char}"></div>`;
+    // ── Header ────────────────────────────────────────────────
+    let headerHtml = '';
 
-    let body = '';
-
-    // Logo
     if (bool('show_logo') && co.logo_url) {
-        body += `<div class="center"><img src="${co.logo_url}" alt="logo" style="max-height:48px;max-width:80%;object-fit:contain;margin-bottom:4px" /></div>`;
+        headerHtml += `<img src="${co.logo_url}" alt="logo" class="logo" />`;
     }
-
-    // Company name
     if (bool('show_company_name') && co.name) {
-        body += `<div class="center bold lg">${escHtml(co.name)}</div>`;
+        headerHtml += `<div class="company-name">${escHtml(co.name)}</div>`;
     }
-
-    // Company address
-    if (bool('show_company_address') && co.address) {
-        body += `<div class="center muted">${escHtml(co.address)}</div>`;
+    let companyMeta = [];
+    if (bool('show_company_address') && co.address) companyMeta.push(escHtml(co.address));
+    if (bool('show_company_phone')   && co.phone)   companyMeta.push('Tel: ' + escHtml(co.phone));
+    if (bool('show_company_email', false) && co.email) companyMeta.push(escHtml(co.email));
+    if (companyMeta.length) {
+        headerHtml += `<div class="company-meta">${companyMeta.join(' &nbsp;|&nbsp; ')}</div>`;
     }
-
-    // Company phone
-    if (bool('show_company_phone') && co.phone) {
-        body += `<div class="center muted">Tel: ${escHtml(co.phone)}</div>`;
-    }
-
-    // Company email
-    if (bool('show_company_email', false) && co.email) {
-        body += `<div class="center muted">${escHtml(co.email)}</div>`;
-    }
-
-    // Header text
     if (s.receipt_header) {
-        body += divider();
-        body += `<div class="center muted">${escHtml(s.receipt_header)}</div>`;
+        headerHtml += `<div class="header-note">${escHtml(s.receipt_header)}</div>`;
     }
 
-    body += divider();
+    // ── Receipt info row ──────────────────────────────────────
+    const dateStr   = bool('show_date_time') ? escHtml(data.date || new Date().toLocaleString()) : '';
+    const custName  = escHtml(data.customer?.name || 'Walk-in');
+    const custPhone = data.customer?.phone ? escHtml(data.customer.phone) : '';
+    const cashier   = bool('show_cashier_name', true) ? escHtml(data.cashierName || data.cashier || '') : '';
+    const receiptId = data.id ? escHtml(String(data.id)) : '';
 
-    // Receipt ID / type
-    if (data.id) body += `<div class="center bold">${escHtml(String(data.id))}</div>`;
+    let metaRows = '';
+    if (dateStr)   metaRows += `<tr><td class="ml">Date</td><td class="mr">${dateStr}</td></tr>`;
+    metaRows       += `<tr><td class="ml">Customer</td><td class="mr">${custName}</td></tr>`;
+    if (custPhone) metaRows += `<tr><td class="ml">Phone</td><td class="mr">${custPhone}</td></tr>`;
+    if (cashier)   metaRows += `<tr><td class="ml">Cashier</td><td class="mr">${cashier}</td></tr>`;
+    if (data.saleCategory) metaRows += `<tr><td class="ml">Category</td><td class="mr">${escHtml(data.saleCategory)}</td></tr>`;
 
-    body += divider();
-
-    // Date & time
-    if (bool('show_date_time')) {
-        const d = data.date || new Date().toLocaleString();
-        body += row('Date:', escHtml(d));
-    }
-
-    // Customer
-    const custName = data.customer?.name || 'Walk-in';
-    body += row('Customer:', escHtml(custName));
-    if (data.customer?.phone) {
-        body += row('Phone:', escHtml(data.customer.phone));
-    }
-
-    // Cashier — POS sends 'cashier', some callers send 'cashierName'
-    if (bool('show_cashier_name', true) && (data.cashierName || data.cashier)) {
-        body += row('Cashier:', escHtml(data.cashierName || data.cashier));
-    }
-
-    // Sale category
-    if (data.saleCategory) {
-        body += row('Category:', escHtml(data.saleCategory));
-    }
-
-    body += divider();
-
-    // Items
-    (data.items || []).forEach(item => {
-        let itemLine = '';
-        if (bool('show_item_sku', false) && item.sku) {
-            itemLine += `[${escHtml(item.sku)}] `;
-        }
-        if (bool('show_item_description', true)) {
-            itemLine += escHtml(item.name);
-        }
-        if (itemLine) body += `<div>${itemLine}</div>`;
-
-        if (bool('show_quantity') && bool('show_unit_price')) {
-            body += row(`  ${item.quantity} × ${fmt(item.price)}`, fmt(item.price * item.quantity));
-        } else if (bool('show_quantity')) {
-            body += `<div>  Qty: ${item.quantity}</div>`;
-        }
+    // ── Items table ───────────────────────────────────────────
+    let itemRows = '';
+    (data.items || []).forEach((item, idx) => {
+        const name  = bool('show_item_description', true) ? escHtml(item.name) : '';
+        const sku   = bool('show_item_sku', false) && item.sku ? `<span class="sku">${escHtml(item.sku)}</span>` : '';
+        const qty   = bool('show_quantity')  ? item.quantity : '';
+        const price = bool('show_unit_price') ? fmt(item.price) : '';
+        const total = fmt(item.price * item.quantity);
+        itemRows += `<tr class="${idx % 2 === 0 ? 'even' : 'odd'}">
+            <td class="item-name">${sku}${name}</td>
+            <td class="item-qty">${qty}</td>
+            <td class="item-price">${price}</td>
+            <td class="item-total">${total}</td>
+        </tr>`;
     });
 
-    body += divider();
-
-    // Totals
+    // ── Totals ────────────────────────────────────────────────
+    let totalsRows = '';
     if (bool('show_subtotal')) {
-        body += row('Subtotal:', fmt(data.subtotal ?? 0));
+        totalsRows += `<tr><td>Subtotal</td><td>${fmt(data.subtotal ?? 0)}</td></tr>`;
     }
     if (bool('show_discount') && (data.discount ?? 0) > 0) {
-        body += row('Discount:', `−${fmt(data.discount)}`);
+        totalsRows += `<tr class="discount"><td>Discount</td><td>−${fmt(data.discount)}</td></tr>`;
     }
     if (bool('show_tax') && (data.tax ?? 0) > 0) {
-        body += row(escHtml(data.taxName || 'Tax') + ':', fmt(data.tax));
+        totalsRows += `<tr><td>${escHtml(data.taxName || 'Tax')}</td><td>${fmt(data.tax)}</td></tr>`;
     }
     (data.charges || []).forEach(c => {
-        body += row(escHtml(c.name) + ':', fmt(c.amount));
+        totalsRows += `<tr><td>${escHtml(c.name)}</td><td>${fmt(c.amount)}</td></tr>`;
     });
+    totalsRows += `<tr class="grand-total"><td>TOTAL</td><td>${fmt(data.total ?? 0)}</td></tr>`;
 
-    body += divider('=');
-    body += `<div class="row bold""><span>TOTAL:</span><span>${fmt(data.total ?? 0)}</span></div>`;
-    body += divider('=');
-
-    // Payment
+    // ── Payment details ───────────────────────────────────────
+    let payRows = '';
     if (bool('show_payment_method')) {
-        body += row('Payment:', escHtml((data.paymentMethod || '').toUpperCase()));
+        payRows += `<tr><td class="ml">Payment</td><td class="mr">${escHtml((data.paymentMethod || '').toUpperCase())}</td></tr>`;
     }
     if (bool('show_change_given') && data.paymentMethod === 'cash') {
-        if (data.amountReceived != null) body += row('Received:', fmt(data.amountReceived));
-        if (data.change != null)         body += row('Change:', fmt(data.change));
+        if (data.amountReceived != null) payRows += `<tr><td class="ml">Amount Received</td><td class="mr">${fmt(data.amountReceived)}</td></tr>`;
+        if (data.change != null)         payRows += `<tr><td class="ml">Change</td><td class="mr">${fmt(data.change)}</td></tr>`;
     }
     if (data.paymentMethod === 'transfer' && data.bankAccountName) {
-        body += row('Bank:', escHtml(data.bankAccountName));
+        payRows += `<tr><td class="ml">Bank</td><td class="mr">${escHtml(data.bankAccountName)}</td></tr>`;
     }
 
-    // Barcode (visual placeholder — real barcode needs a lib, this is text)
-    if (bool('show_barcode', false) && data.id) {
-        body += divider();
-        body += `<div class="center barcode">${escHtml(String(data.id))}</div>`;
-    }
+    // ── Barcode ───────────────────────────────────────────────
+    const barcodeHtml = (bool('show_barcode', false) && data.id)
+        ? `<div class="barcode">${escHtml(String(data.id))}</div>` : '';
 
-    body += divider();
-    // Footer
-    const footer = s.receipt_footer || 'Thank you for your patronage!';
-    body += `<div class="center muted">${escHtml(footer)}</div>`;
-    body += '<br/><br/>';
+    // ── Footer ────────────────────────────────────────────────
+    const footer = escHtml(s.receipt_footer || 'Thank you for your patronage!');
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Receipt – ${escHtml(String(data.id || ''))}</title>
 <style>
-  @page { size: A4; margin: 20mm; }
-  body { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6;
-         margin: 0; padding: 20mm; width: ${width}; max-width: 210mm; background: #fff; }
-  .center { text-align: center; }
-  .bold { font-weight: 700; }
-  .lg { font-size: 18px; }
-  .muted { color: #555; }
-  .row { display: flex; justify-content: space-between; padding: 4px 0; }
-  .barcode { font-size: 12px; letter-spacing: 3px; }
-  .divider::before { content: attr(data-char, '-'); display: block;
-                     border-top: 1px solid #999;
-                     margin: 10px 0; }
+  @page { size: A4; margin: 15mm 20mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px;
+         color: #1e293b; line-height: 1.5; background: #fff; }
+
+  /* ── Page wrapper ── */
+  .page { max-width: 720px; margin: 0 auto; padding: 30px 36px 40px; }
+
+  /* ── Header ── */
+  .receipt-header { text-align: center; padding-bottom: 18px;
+                    border-bottom: 3px solid #2563eb; margin-bottom: 20px; }
+  .logo { max-height: 56px; max-width: 180px; object-fit: contain; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto; }
+  .company-name { font-size: 22px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
+  .company-meta { font-size: 11px; color: #64748b; margin-top: 4px; }
+  .header-note  { font-size: 11px; color: #64748b; margin-top: 6px; font-style: italic; }
+
+  /* ── Title band ── */
+  .title-band { background: #2563eb; color: #fff; text-align: center;
+                padding: 10px 16px; border-radius: 6px; margin-bottom: 20px; }
+  .title-band h1 { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+  .title-band .receipt-num { font-size: 12px; opacity: 0.85; margin-top: 2px; font-family: monospace; }
+
+  /* ── Meta info table (date / customer / cashier) ── */
+  .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .meta-table td { padding: 5px 8px; font-size: 12.5px; }
+  .meta-table .ml { color: #64748b; width: 38%; }
+  .meta-table .mr { font-weight: 600; color: #1e293b; }
+  .meta-table tr:not(:last-child) td { border-bottom: 1px solid #f1f5f9; }
+
+  /* ── Items table ── */
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: 0.8px; color: #64748b; margin-bottom: 6px; }
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .items-table thead tr { background: #f1f5f9; }
+  .items-table thead th { padding: 8px 10px; font-size: 11px; font-weight: 700;
+                           text-transform: uppercase; letter-spacing: 0.6px; color: #475569; text-align: left; }
+  .items-table thead th.r { text-align: right; }
+  .items-table tbody tr.even { background: #fff; }
+  .items-table tbody tr.odd  { background: #f8fafc; }
+  .items-table tbody td { padding: 9px 10px; font-size: 13px; vertical-align: top; }
+  .items-table tbody td.item-qty,
+  .items-table tbody td.item-price,
+  .items-table tbody td.item-total { text-align: right; white-space: nowrap; }
+  .items-table .sku { display: block; font-size: 10px; color: #94a3b8; margin-bottom: 1px; }
+  .items-table tfoot td { padding: 0; }
+
+  /* ── Totals ── */
+  .totals-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; margin-left: auto; }
+  .totals-table td { padding: 6px 10px; font-size: 13px; }
+  .totals-table td:first-child { color: #64748b; width: 70%; text-align: right; padding-right: 20px; }
+  .totals-table td:last-child  { text-align: right; font-weight: 600; color: #1e293b; width: 30%; }
+  .totals-table tr.discount td { color: #ef4444; }
+  .totals-table tr:not(.grand-total):not(:first-child) td { border-top: 1px solid #f1f5f9; }
+  .totals-table tr.grand-total td { background: #1e3a8a; color: #fff !important;
+                                     font-size: 16px; font-weight: 800;
+                                     border-radius: 0; padding: 10px; }
+  .totals-table tr.grand-total td:first-child { border-radius: 6px 0 0 6px; }
+  .totals-table tr.grand-total td:last-child  { border-radius: 0 6px 6px 0; font-size: 16px; }
+
+  /* ── Payment section ── */
+  .pay-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+             padding: 14px 16px; margin-bottom: 20px; }
+  .pay-table { width: 100%; border-collapse: collapse; }
+  .pay-table .ml { color: #166534; font-size: 12px; width: 50%; }
+  .pay-table .mr { font-weight: 700; color: #14532d; font-size: 12px; text-align: right; }
+  .pay-table tr:not(:last-child) td { padding-bottom: 5px; }
+
+  /* ── Barcode ── */
+  .barcode { text-align: center; font-family: monospace; font-size: 13px;
+             letter-spacing: 4px; color: #334155; padding: 12px 0; }
+
+  /* ── Footer ── */
+  .receipt-footer { border-top: 1px dashed #cbd5e1; padding-top: 16px;
+                    text-align: center; margin-top: 4px; }
+  .receipt-footer .thank-you { font-size: 14px; font-weight: 700; color: #2563eb; margin-bottom: 4px; }
+  .receipt-footer .note { font-size: 10.5px; color: #94a3b8; }
+
   @media print {
-    @page { size: A4; margin: 15mm; }
-    body { width: 100%; padding: 0; font-size: 12px; }
+    @page { size: A4; margin: 12mm 15mm; }
+    body { font-size: 12px; }
+    .page { padding: 0; }
+    .items-table tbody tr.even { background: #fff !important; }
+    .items-table tbody tr.odd  { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .items-table thead tr      { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .totals-table tr.grand-total td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .title-band { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pay-box    { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style></head>
-<body>${body}</body></html>`;
+<body><div class="page">
+
+  <div class="receipt-header">
+    ${headerHtml}
+  </div>
+
+  <div class="title-band">
+    <h1>SALES RECEIPT</h1>
+    ${receiptId ? `<div class="receipt-num">${receiptId}</div>` : ''}
+  </div>
+
+  ${metaRows ? `<table class="meta-table">${metaRows}</table>` : ''}
+
+  <div class="section-title">Items Purchased</div>
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="r">Qty</th>
+        <th class="r">Unit Price</th>
+        <th class="r">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+
+  <table class="totals-table">
+    ${totalsRows}
+  </table>
+
+  ${payRows ? `<div class="pay-box"><table class="pay-table">${payRows}</table></div>` : ''}
+
+  ${barcodeHtml}
+
+  <div class="receipt-footer">
+    <div class="thank-you">${footer}</div>
+    <div class="note">This is a computer-generated receipt.</div>
+  </div>
+
+</div></body></html>`;
 }
 
 function escHtml(str) {
