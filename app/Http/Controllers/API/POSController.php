@@ -264,7 +264,11 @@ class POSController extends Controller
 
             // Calculate totals
             $subtotal = 0;
-            $items = $request->items;
+            $items = array_map(function ($item) {
+                return array_merge($item, [
+                    'unit' => $item['unit'] ?? null,
+                ]);
+            }, $request->items);
             
             foreach ($items as $item) {
                 $subtotal += $item['price'] * $item['quantity'];

@@ -157,7 +157,7 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
     (data.items || []).forEach((item, idx) => {
         const name  = bool('show_item_description', true) ? escHtml(item.name) : '';
         const sku   = bool('show_item_sku', false) && item.sku ? `<span class="sku">${escHtml(item.sku)}</span>` : '';
-        const qty   = bool('show_quantity')  ? item.quantity : '';
+        const qty   = bool('show_quantity')  ? `${item.quantity}${item.unit ? ' ' + escHtml(item.unit) : ''}` : '';
         const price = bool('show_unit_price') ? fmt(item.price) : '';
         const total = fmt(item.price * item.quantity);
         itemRows += `<tr class="${idx % 2 === 0 ? 'even' : 'odd'}">

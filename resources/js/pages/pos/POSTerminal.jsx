@@ -463,7 +463,8 @@ export default function POSTerminal() {
                 product_id: item.id,
                 quantity: item.quantity,
                 price: item.price,
-                name: item.name
+                name: item.name,
+                unit: item.unit || null,
             }));
 
             // Get selected tax info
@@ -544,7 +545,8 @@ export default function POSTerminal() {
                 product_id: item.id,
                 quantity: item.quantity,
                 price: item.price,
-                name: item.name
+                name: item.name,
+                unit: item.unit || null,
             }));
 
             // Get selected tax info
@@ -1522,7 +1524,7 @@ export default function POSTerminal() {
                             <div className="space-y-2 mb-3">
                                 {lastReceipt.items.map(item => (
                                     <div key={item.id} className="flex justify-between text-sm">
-                                        <span>{item.name} x{item.quantity}</span>
+                                        <span>{item.name} x{item.quantity}{item.unit ? ` ${item.unit}` : ''}</span>
                                         <span className="font-mono">{window.getCurrencySymbol()}{(item.price * item.quantity).toLocaleString()}</span>
                                     </div>
                                 ))}
