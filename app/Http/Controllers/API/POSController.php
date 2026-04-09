@@ -610,19 +610,19 @@ class POSController extends Controller
                     : null,
             ];
 
-            // Add credit facility info when payment involved credit
-            if (($isCredit || (isset($creditRemainder) && $creditRemainder > 0)) && $request->customer_id) {
+            // Add credit facility info for any customer that has a credit facility
+            if ($request->customer_id) {
                 $freshCustomer = Customer::find($request->customer_id);
-                if ($freshCustomer) {
+                if ($freshCustomer && (float) $freshCustomer->credit_limit > 0) {
                     $creditLimit        = (float) $freshCustomer->credit_limit;
                     $outstandingBalance = (float) $freshCustomer->outstanding_balance;
-                    $amountCharged      = $isCredit ? $total : ($creditRemainder ?? 0);
+                    $amountCharged      = ($isCredit ?? false) ? $total : (isset($creditRemainder) ? $creditRemainder : 0);
                     $receipt['creditInfo'] = [
                         'creditLimit'        => $creditLimit,
                         'amountCharged'      => $amountCharged,
                         'outstandingBalance' => $outstandingBalance,
                         'availableCredit'    => max(0, $creditLimit - $outstandingBalance),
-                        'dueDate'            => $freshCustomer->payment_terms_days
+                        'dueDate'            => ($freshCustomer->payment_terms_days && $amountCharged > 0)
                             ? now()->addDays($freshCustomer->payment_terms_days)->format('M d, Y')
                             : null,
                     ];

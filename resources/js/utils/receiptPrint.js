@@ -201,15 +201,21 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
     let creditInfoHtml = '';
     if (data.creditInfo) {
         const ci = data.creditInfo;
+        const chargedRow = (ci.amountCharged > 0)
+            ? `<tr><td class="cl">Charged This Sale</td><td class="cr" style="color:#dc2626">${fmt(ci.amountCharged)}</td></tr>`
+            : '';
+        const dueRow = ci.dueDate
+            ? `<tr><td class="cl">Payment Due By</td><td class="cr"><strong>${escHtml(ci.dueDate)}</strong></td></tr>`
+            : '';
         creditInfoHtml = `
   <div class="credit-box">
-    <div class="credit-title">&#9432; Credit Facility Details</div>
+    <div class="credit-title">&#9432; Credit Facility Statement</div>
     <table class="credit-table">
-      <tr><td class="cl">Credit Limit</td><td class="cr">${fmt(ci.creditLimit)}</td></tr>
-      <tr><td class="cl">Charged to Credit</td><td class="cr">${fmt(ci.amountCharged)}</td></tr>
-      <tr><td class="cl">Outstanding Balance</td><td class="cr">${fmt(ci.outstandingBalance)}</td></tr>
-      <tr><td class="cl">Available Credit</td><td class="cr">${fmt(ci.availableCredit)}</td></tr>
-      ${ci.dueDate ? `<tr><td class="cl">Payment Due By</td><td class="cr"><strong>${escHtml(ci.dueDate)}</strong></td></tr>` : ''}
+      <tr><td class="cl">Total Facility</td><td class="cr">${fmt(ci.creditLimit)}</td></tr>
+      ${chargedRow}
+      <tr><td class="cl">Total Outstanding</td><td class="cr" style="color:#dc2626;font-weight:700">${fmt(ci.outstandingBalance)}</td></tr>
+      <tr><td class="cl">Available (Remaining)</td><td class="cr" style="color:#16a34a;font-weight:700">${fmt(ci.availableCredit)}</td></tr>
+      ${dueRow}
     </table>
   </div>`;
     }
