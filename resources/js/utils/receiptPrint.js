@@ -197,6 +197,23 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
         payRows += `<tr><td class="ml">Bank</td><td class="mr">${escHtml(data.bankAccountName)}</td></tr>`;
     }
 
+    // ── Credit facility info ──────────────────────────────────
+    let creditInfoHtml = '';
+    if (data.creditInfo) {
+        const ci = data.creditInfo;
+        creditInfoHtml = `
+  <div class="credit-box">
+    <div class="credit-title">&#9432; Credit Facility Details</div>
+    <table class="credit-table">
+      <tr><td class="cl">Credit Limit</td><td class="cr">${fmt(ci.creditLimit)}</td></tr>
+      <tr><td class="cl">Charged to Credit</td><td class="cr">${fmt(ci.amountCharged)}</td></tr>
+      <tr><td class="cl">Outstanding Balance</td><td class="cr">${fmt(ci.outstandingBalance)}</td></tr>
+      <tr><td class="cl">Available Credit</td><td class="cr">${fmt(ci.availableCredit)}</td></tr>
+      ${ci.dueDate ? `<tr><td class="cl">Payment Due By</td><td class="cr"><strong>${escHtml(ci.dueDate)}</strong></td></tr>` : ''}
+    </table>
+  </div>`;
+    }
+
     // ── Barcode ───────────────────────────────────────────────
     const barcodeHtml = (bool('show_barcode', false) && data.id)
         ? `<div class="barcode">${escHtml(String(data.id))}</div>` : '';
@@ -207,102 +224,115 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Receipt – ${escHtml(String(data.id || ''))}</title>
 <style>
-  @page { size: A4; margin: 15mm 20mm; }
+  @page { size: A4; margin: 10mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px;
-         color: #1e293b; line-height: 1.5; background: #fff; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px;
+         color: #1e293b; line-height: 1.4; background: #fff; }
 
   /* ── Page wrapper ── */
-  .page { max-width: 720px; margin: 0 auto; padding: 30px 36px 40px; }
+  .page { max-width: 720px; margin: 0 auto; padding: 14px 18px 18px; }
 
   /* ── Header ── */
-  .receipt-header { text-align: center; padding-bottom: 18px;
-                    border-bottom: 3px solid #2563eb; margin-bottom: 20px; }
-  .logo { max-height: 56px; max-width: 180px; object-fit: contain; margin-bottom: 8px; display: block; margin-left: auto; margin-right: auto; }
-  .company-name { font-size: 22px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
-  .company-meta { font-size: 11px; color: #64748b; margin-top: 4px; }
-  .header-note  { font-size: 11px; color: #64748b; margin-top: 6px; font-style: italic; }
+  .receipt-header { text-align: center; padding-bottom: 10px;
+                    border-bottom: 3px solid #2563eb; margin-bottom: 10px; }
+  .logo { max-height: 48px; max-width: 160px; object-fit: contain; margin-bottom: 5px; display: block; margin-left: auto; margin-right: auto; }
+  .company-name { font-size: 18px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
+  .company-meta { font-size: 10.5px; color: #64748b; margin-top: 3px; }
+  .header-note  { font-size: 10.5px; color: #64748b; margin-top: 4px; font-style: italic; }
 
   /* ── Title band ── */
   .title-band { background: #2563eb; color: #fff; text-align: center;
-                padding: 10px 16px; border-radius: 6px; margin-bottom: 20px; }
-  .title-band h1 { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
-  .title-band .receipt-num { font-size: 12px; opacity: 0.85; margin-top: 2px; font-family: monospace; }
+                padding: 7px 14px; border-radius: 5px; margin-bottom: 10px; }
+  .title-band h1 { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+  .title-band .receipt-num { font-size: 11px; opacity: 0.85; margin-top: 1px; font-family: monospace; }
 
   /* ── Meta info table (date / customer / cashier) ── */
-  .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-  .meta-table td { padding: 5px 8px; font-size: 12.5px; }
+  .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .meta-table td { padding: 3px 6px; font-size: 11.5px; }
   .meta-table .ml { color: #64748b; width: 38%; }
   .meta-table .mr { font-weight: 600; color: #1e293b; }
   .meta-table tr:not(:last-child) td { border-bottom: 1px solid #f1f5f9; }
 
   /* ── Items table ── */
-  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                   letter-spacing: 0.8px; color: #64748b; margin-bottom: 6px; }
-  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: 0.8px; color: #64748b; margin-bottom: 4px; }
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   .items-table thead tr { background: #f1f5f9; }
-  .items-table thead th { padding: 8px 10px; font-size: 11px; font-weight: 700;
+  .items-table thead th { padding: 6px 8px; font-size: 10px; font-weight: 700;
                            text-transform: uppercase; letter-spacing: 0.6px; color: #475569; text-align: left; }
   .items-table thead th.r { text-align: right; }
   .items-table tbody tr.even { background: #fff; }
   .items-table tbody tr.odd  { background: #f8fafc; }
-  .items-table tbody td { padding: 9px 10px; font-size: 13px; vertical-align: top; }
+  .items-table tbody td { padding: 6px 8px; font-size: 12px; vertical-align: top; }
   .items-table tbody td.item-qty,
   .items-table tbody td.item-price,
   .items-table tbody td.item-total { text-align: right; white-space: nowrap; }
-  .items-table .sku { display: block; font-size: 10px; color: #94a3b8; margin-bottom: 1px; }
+  .items-table .sku { display: block; font-size: 9.5px; color: #94a3b8; margin-bottom: 1px; }
   .items-table tfoot td { padding: 0; }
 
   /* ── Totals ── */
-  .totals-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; margin-left: auto; }
-  .totals-table td { padding: 6px 10px; font-size: 13px; }
-  .totals-table td:first-child { color: #64748b; width: 70%; text-align: right; padding-right: 20px; }
+  .totals-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; margin-left: auto; }
+  .totals-table td { padding: 4px 8px; font-size: 12px; }
+  .totals-table td:first-child { color: #64748b; width: 70%; text-align: right; padding-right: 16px; }
   .totals-table td:last-child  { text-align: right; font-weight: 600; color: #1e293b; width: 30%; }
   .totals-table tr.discount td { color: #ef4444; }
   .totals-table tr:not(.grand-total):not(:first-child) td { border-top: 1px solid #f1f5f9; }
   .totals-table tr.grand-total td { background: #1e3a8a; color: #fff !important;
-                                     font-size: 16px; font-weight: 800;
-                                     border-radius: 0; padding: 10px; }
-  .totals-table tr.grand-total td:first-child { border-radius: 6px 0 0 6px; }
-  .totals-table tr.grand-total td:last-child  { border-radius: 0 6px 6px 0; font-size: 16px; }
-
-  /* ── Items Brought by Customer ── */
-  .brought-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
-                 padding: 14px 16px; margin-bottom: 20px; }
-  .brought-box .brought-title { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                                letter-spacing: 0.8px; color: #92400e; margin-bottom: 8px; }
-  .brought-table { width: 100%; border-collapse: collapse; }
-  .brought-table td { padding: 4px 6px; font-size: 12.5px; color: #78350f; }
-  .brought-table td:last-child { text-align: right; font-weight: 600; }
+                                     font-size: 14px; font-weight: 800;
+                                     border-radius: 0; padding: 7px 8px; }
+  .totals-table tr.grand-total td:first-child { border-radius: 5px 0 0 5px; }
+  .totals-table tr.grand-total td:last-child  { border-radius: 0 5px 5px 0; }
 
   /* ── Payment section ── */
-  .pay-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
-             padding: 14px 16px; margin-bottom: 20px; }
+  .pay-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;
+             padding: 8px 12px; margin-bottom: 10px; }
   .pay-table { width: 100%; border-collapse: collapse; }
-  .pay-table .ml { color: #166534; font-size: 12px; width: 50%; }
-  .pay-table .mr { font-weight: 700; color: #14532d; font-size: 12px; text-align: right; }
-  .pay-table tr:not(:last-child) td { padding-bottom: 5px; }
+  .pay-table .ml { color: #166534; font-size: 11.5px; width: 50%; }
+  .pay-table .mr { font-weight: 700; color: #14532d; font-size: 11.5px; text-align: right; }
+  .pay-table tr:not(:last-child) td { padding-bottom: 3px; }
+
+  /* ── Credit facility ── */
+  .credit-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;
+                padding: 8px 12px; margin-bottom: 10px; }
+  .credit-title { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: 0.8px; color: #1d4ed8; margin-bottom: 6px; }
+  .credit-table { width: 100%; border-collapse: collapse; }
+  .credit-table td { padding: 3px 4px; font-size: 11.5px; }
+  .credit-table .cl { color: #1e40af; width: 55%; }
+  .credit-table .cr { text-align: right; font-weight: 600; color: #1e3a8a; }
+  .credit-table tr:not(:last-child) td { border-bottom: 1px solid #dbeafe; }
+
+  /* ── Items Brought by Customer ── */
+  .brought-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px;
+                 padding: 8px 12px; margin-bottom: 10px; }
+  .brought-box .brought-title { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                                letter-spacing: 0.8px; color: #92400e; margin-bottom: 5px; }
+  .brought-table { width: 100%; border-collapse: collapse; }
+  .brought-table td { padding: 3px 4px; font-size: 11.5px; color: #78350f; }
+  .brought-table td:last-child { text-align: right; font-weight: 600; }
 
   /* ── Barcode ── */
-  .barcode { text-align: center; font-family: monospace; font-size: 13px;
-             letter-spacing: 4px; color: #334155; padding: 12px 0; }
+  .barcode { text-align: center; font-family: monospace; font-size: 12px;
+             letter-spacing: 4px; color: #334155; padding: 8px 0; }
 
   /* ── Footer ── */
-  .receipt-footer { border-top: 1px dashed #cbd5e1; padding-top: 16px;
+  .receipt-footer { border-top: 1px dashed #cbd5e1; padding-top: 10px;
                     text-align: center; margin-top: 4px; }
-  .receipt-footer .thank-you { font-size: 14px; font-weight: 700; color: #2563eb; margin-bottom: 4px; }
-  .receipt-footer .note { font-size: 10.5px; color: #94a3b8; }
+  .receipt-footer .thank-you { font-size: 13px; font-weight: 700; color: #2563eb; margin-bottom: 3px; }
+  .receipt-footer .note { font-size: 10px; color: #94a3b8; }
 
   @media print {
-    @page { size: A4; margin: 12mm 15mm; }
-    body { font-size: 12px; }
+    @page { size: A4; margin: 8mm 10mm; }
+    body { font-size: 11px; }
     .page { padding: 0; }
     .items-table tbody tr.even { background: #fff !important; }
     .items-table tbody tr.odd  { background: #f8fafc !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .items-table thead tr      { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .totals-table tr.grand-total td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .title-band { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .pay-box    { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .title-band  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pay-box     { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .credit-box  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .brought-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style></head>
 <body><div class="page">
@@ -336,6 +366,8 @@ export function buildReceiptHTML(data, settingsOverride, companyOverride) {
   </table>
 
   ${payRows ? `<div class="pay-box"><table class="pay-table">${payRows}</table></div>` : ''}
+
+  ${creditInfoHtml}
 
   ${(data.customerItems || []).filter(r => r.name).length > 0 ? `
   <div class="brought-box">

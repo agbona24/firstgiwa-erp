@@ -69,6 +69,8 @@ export default function InventoryList() {
         secondary_unit: '', conversion_factor: '', cost_price: '', selling_price: '',
         min_stock: '', critical_level: '', barcode: '', warehouse_id: '', opening_stock: '',
         track_inventory: true,
+        has_pelleting_crushing: false, pelleting_price_per_unit: '', crushing_price_per_unit: '',
+        pos_service: 'none',
     });
 
     const [categoryForm, setCategoryForm] = useState({ name: '', code: '', parent_id: '' });
@@ -260,6 +262,9 @@ export default function InventoryList() {
                 barcode: productForm.barcode || null,
                 warehouse_id: productForm.warehouse_id || null,
                 track_inventory: productForm.track_inventory,
+                has_pelleting_crushing: productForm.has_pelleting_crushing,
+                pelleting_price_per_unit: productForm.has_pelleting_crushing ? (parseFloat(productForm.pelleting_price_per_unit) || 0) : 0,
+                crushing_price_per_unit: productForm.has_pelleting_crushing ? (parseFloat(productForm.crushing_price_per_unit) || 0) : 0,
             };
 
             if (productForm.id) {
@@ -284,8 +289,21 @@ export default function InventoryList() {
                 toast.success('Product created successfully');
             }
             
+            // Persist POS service config to localStorage
+            const savedProductId = productForm.id || (typeof created !== 'undefined' && (created?.product?.id || created?.data?.product?.id || created?.data?.id || created?.id));
+            if (savedProductId) {
+                try {
+                    const svcCfg = JSON.parse(localStorage.getItem('pos_service_config') || '{}');
+                    if (productForm.pos_service && productForm.pos_service !== 'none') {
+                        svcCfg[String(savedProductId)] = productForm.pos_service;
+                    } else {
+                        delete svcCfg[String(savedProductId)];
+                    }
+                    localStorage.setItem('pos_service_config', JSON.stringify(svcCfg));
+                } catch(e) {}
+            }
             setShowAddProduct(false);
-            setProductForm({ name: '', sku: '', category_id: '', inventory_type: 'raw_material', unit: 'kg', secondary_unit: '', conversion_factor: '', cost_price: '', selling_price: '', min_stock: '', critical_level: '', barcode: '', warehouse_id: '', opening_stock: '', track_inventory: true });
+            setProductForm({ name: '', sku: '', category_id: '', inventory_type: 'raw_material', unit: 'kg', secondary_unit: '', conversion_factor: '', cost_price: '', selling_price: '', min_stock: '', critical_level: '', barcode: '', warehouse_id: '', opening_stock: '', track_inventory: true, has_pelleting_crushing: false, pelleting_price_per_unit: '', crushing_price_per_unit: '', pos_service: 'none' });
             fetchInventory();
             fetchAllProducts();
             fetchStats();
@@ -426,6 +444,7 @@ export default function InventoryList() {
                 warehouse_id: product.warehouse_id || '',
                 opening_stock: '',
                 track_inventory: true,
+                pos_service: (() => { try { return JSON.parse(localStorage.getItem('pos_service_config') || '{}')[String(row.id)] || 'none'; } catch(e) { return 'none'; } })(),
                 id: row.id, // Store ID for update
             });
             setShowAddProduct(true);
@@ -599,7 +618,7 @@ export default function InventoryList() {
             )}
 
             {/* Add Product SlideOut */}
-            <SlideOut isOpen={showAddProduct} onClose={() => { setShowAddProduct(false); setProductForm({ name: '', sku: '', category_id: '', inventory_type: 'raw_material', unit: 'kg', secondary_unit: '', conversion_factor: '', cost_price: '', selling_price: '', min_stock: '', critical_level: '', barcode: '', warehouse_id: '', opening_stock: '', track_inventory: true }); }} title={productForm.id ? 'Edit Product' : 'Add New Product'} size="lg">
+            <SlideOut isOpen={showAddProduct} onClose={() => { setShowAddProduct(false); setProductForm({ name: '', sku: '', category_id: '', inventory_type: 'raw_material', unit: 'kg', secondary_unit: '', conversion_factor: '', cost_price: '', selling_price: '', min_stock: '', critical_level: '', barcode: '', warehouse_id: '', opening_stock: '', track_inventory: true, has_pelleting_crushing: false, pelleting_price_per_unit: '', crushing_price_per_unit: '', pos_service: 'none' }); }} title={productForm.id ? 'Edit Product' : 'Add New Product'} size="lg">
                 <form onSubmit={(e) => { e.preventDefault(); handleAddProduct(); }} className="space-y-5">
                     {/* Basic Info */}
                     <div className="border-b pb-4">
@@ -726,6 +745,28 @@ export default function InventoryList() {
                     <div className="flex items-center gap-2 mb-2">
                         <input type="checkbox" id="track" checked={productForm.track_inventory} onChange={(e) => setProductForm({...productForm, track_inventory: e.target.checked})} className="w-4 h-4 text-blue-600 border-slate-300 rounded" />
                         <label htmlFor="track" className="text-sm text-slate-700">Track inventory levels for this product</label>
+                    </div>
+
+                    {/* POS Auto-Services */}
+                    <div className="border border-purple-200 bg-purple-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-purple-900 mb-1 text-sm">POS Auto-Services</h4>
+                        <p className="text-xs text-purple-700 mb-3">When this product is added at the POS, automatically add the selected service item(s) with the same quantity.</p>
+                        <select
+                            value={productForm.pos_service}
+                            onChange={(e) => setProductForm({...productForm, pos_service: e.target.value})}
+                            className="w-full px-4 py-2.5 border border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-100 bg-white text-sm"
+                        >
+                            <option value="none">None – no auto-service</option>
+                            <option value="pelleting">Pelleting only</option>
+                            <option value="both">Pelleting &amp; Crushing</option>
+                        </select>
+                        {productForm.pos_service !== 'none' && (
+                            <p className="text-xs text-purple-600 mt-2">
+                                {productForm.pos_service === 'pelleting'
+                                    ? 'Pelleting will be auto-added and its quantity will always match this product\'s quantity in the cart.'
+                                    : 'Pelleting AND Crushing will be auto-added and their quantities will always match this product\'s quantity in the cart.'}
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex gap-3 pt-4 border-t">

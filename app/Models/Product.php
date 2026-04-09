@@ -38,6 +38,9 @@ class Product extends Model
         'image_url',
         'is_active',
         'track_inventory',
+        'has_pelleting_crushing',
+        'pelleting_price_per_unit',
+        'crushing_price_per_unit',
     ];
 
     protected $casts = [
@@ -47,6 +50,9 @@ class Product extends Model
         'conversion_factor' => 'decimal:4',
         'is_active' => 'boolean',
         'track_inventory' => 'boolean',
+        'has_pelleting_crushing' => 'boolean',
+        'pelleting_price_per_unit' => 'decimal:2',
+        'crushing_price_per_unit' => 'decimal:2',
     ];
 
     /**

@@ -100,6 +100,9 @@ class POSController extends Controller
                 'category_name' => $product->category?->name ?? 'Uncategorized',
                 'lowStockThreshold' => $lowStockThreshold,
                 'unit' => $product->unit_of_measure,
+                'has_pelleting_crushing' => (bool) $product->has_pelleting_crushing,
+                'pelleting_price_per_unit' => (float) $product->pelleting_price_per_unit,
+                'crushing_price_per_unit' => (float) $product->crushing_price_per_unit,
             ];
         });
 
@@ -235,6 +238,12 @@ class POSController extends Controller
             'charges.*.charge_name' => 'required_with:charges|string',
             'charges.*.charge_amount' => 'required_with:charges|numeric|min:0',
             'charges.*.add_to_credit' => 'nullable|boolean',
+            'service_charges' => 'nullable|array',
+            'service_charges.*.service_type' => 'required_with:service_charges|in:pelleting,crushing',
+            'service_charges.*.product_name' => 'required_with:service_charges|string',
+            'service_charges.*.quantity' => 'required_with:service_charges|numeric|min:0',
+            'service_charges.*.price_per_unit' => 'required_with:service_charges|numeric|min:0',
+            'service_charges.*.total' => 'required_with:service_charges|numeric|min:0',
         ]);
 
         $tenantId = Auth::user()->tenant_id;
@@ -295,7 +304,14 @@ class POSController extends Controller
                 $chargesTotal += floatval($charge['charge_amount']);
             }
 
-            $total = $subtotal - $discountAmount + $taxAmount + $chargesTotal;
+            // Sum service charges (pelleting / crushing)
+            $serviceChargesData = $request->input('service_charges', []);
+            $serviceChargesTotal = 0;
+            foreach ($serviceChargesData as $sc) {
+                $serviceChargesTotal += floatval($sc['total']);
+            }
+
+            $total = $subtotal - $discountAmount + $taxAmount + $chargesTotal + $serviceChargesTotal;
 
             // Generate order number
             $lastOrder = SalesOrder::where('tenant_id', $tenantId)
@@ -429,6 +445,24 @@ class POSController extends Controller
                 }
             }
 
+            // Save service charges (pelleting / crushing) as order_charges
+            if (!empty($serviceChargesData)) {
+                foreach ($serviceChargesData as $sc) {
+                    $label = ucfirst($sc['service_type']) . ' – ' . $sc['product_name'];
+                    DB::table('order_charges')->insert([
+                        'chargeable_type' => SalesOrder::class,
+                        'chargeable_id'   => $salesOrder->id,
+                        'sale_charge_id'  => null,
+                        'charge_name'     => $label,
+                        'charge_amount'   => floatval($sc['total']),
+                        'add_to_credit'   => false,
+                        'credited'        => false,
+                        'created_at'      => now(),
+                        'updated_at'      => now(),
+                    ]);
+                }
+            }
+
             // Create payment record or credit transaction
             if ($isCredit) {
                 // Create credit transaction for tracking
@@ -555,6 +589,15 @@ class POSController extends Controller
                     'amount' => floatval($c['charge_amount']),
                 ], $chargesData)),
                 'chargesTotal' => $chargesTotal,
+                'serviceCharges' => array_values(array_map(fn($sc) => [
+                    'service_type'   => $sc['service_type'],
+                    'product_name'   => $sc['product_name'],
+                    'quantity'       => floatval($sc['quantity']),
+                    'price_per_unit' => floatval($sc['price_per_unit']),
+                    'total'          => floatval($sc['total']),
+                    'unit'           => $sc['unit'] ?? null,
+                ], $serviceChargesData)),
+                'serviceChargesTotal' => $serviceChargesTotal,
                 'total' => $total,
                 'paymentMethod' => $request->payment_method,
                 'amountReceived' => $request->amount_received ?? $total,
@@ -564,6 +607,25 @@ class POSController extends Controller
                     ? \App\Models\SaleCategory::find($request->sale_category_id)?->name
                     : null,
             ];
+
+            // Add credit facility info when payment involved credit
+            if (($isCredit || (isset($creditRemainder) && $creditRemainder > 0)) && $request->customer_id) {
+                $freshCustomer = Customer::find($request->customer_id);
+                if ($freshCustomer) {
+                    $creditLimit        = (float) $freshCustomer->credit_limit;
+                    $outstandingBalance = (float) $freshCustomer->outstanding_balance;
+                    $amountCharged      = $isCredit ? $total : ($creditRemainder ?? 0);
+                    $receipt['creditInfo'] = [
+                        'creditLimit'        => $creditLimit,
+                        'amountCharged'      => $amountCharged,
+                        'outstandingBalance' => $outstandingBalance,
+                        'availableCredit'    => max(0, $creditLimit - $outstandingBalance),
+                        'dueDate'            => $freshCustomer->payment_terms_days
+                            ? now()->addDays($freshCustomer->payment_terms_days)->format('M d, Y')
+                            : null,
+                    ];
+                }
+            }
 
             return response()->json([
                 'success' => true,

@@ -72,6 +72,46 @@ export default function POSTerminal() {
     const printSettingsRef = useRef(null);
     const companyInfoRef = useRef({});
 
+    // ── POS Auto-Services (Pelleting / Crushing) ────────────────────────
+    // Tracks which service product IDs the user has manually dismissed this session
+    const removedServicesRef = useRef(new Set());
+
+    /** Read service config from localStorage: { "productId": "pelleting"|"both" } */
+    const getPosServiceConfig = () => {
+        try { return JSON.parse(localStorage.getItem('pos_service_config') || '{}'); } catch(e) { return {}; }
+    };
+
+    /**
+     * Re-computes service cart items based on current regular items + config.
+     * Service items are marked _isService:true and their quantity = sum of parent quantities.
+     * Items in removedServicesRef are NOT re-added.
+     */
+    const syncServiceItems = (currentCart, productList) => {
+        const config = getPosServiceConfig();
+        const pelletProduct = productList.find(p => /pellet/i.test(p.name));
+        const crushProduct  = productList.find(p => /crush/i.test(p.name));
+
+        let reqPelleting = 0;
+        let reqCrushing  = 0;
+        currentCart.forEach(item => {
+            if (item._isService) return;
+            const svc = config[String(item.id)];
+            if (svc === 'pelleting' || svc === 'both') reqPelleting += item.quantity;
+            if (svc === 'both') reqCrushing += item.quantity;
+        });
+
+        // Strip old service items, then re-append updated ones
+        let result = currentCart.filter(i => !i._isService);
+        if (pelletProduct && reqPelleting > 0 && !removedServicesRef.current.has(pelletProduct.id)) {
+            result.push({ ...pelletProduct, quantity: reqPelleting, _isService: true, _serviceType: 'pelleting' });
+        }
+        if (crushProduct && reqCrushing > 0 && !removedServicesRef.current.has(crushProduct.id)) {
+            result.push({ ...crushProduct, quantity: reqCrushing, _isService: true, _serviceType: 'crushing' });
+        }
+        return result;
+    };
+    // ────────────────────────────────────────────────────────────────────
+
     const toast = useToast();
     const confirm = useConfirm();
 
@@ -297,15 +337,17 @@ export default function POSTerminal() {
 
         if (existing) {
             // Increment quantity
-            setCart(cart.map(item =>
+            const updated = cart.map(item =>
                 item.id === product.id
                     ? { ...item, quantity: item.quantity + 1 }
                     : item
-            ));
+            );
+            setCart(syncServiceItems(updated, products));
             toast.success(`Added another ${product.name}`);
         } else {
             // Add new item with quantity 1
-            setCart([...cart, { ...product, quantity: 1 }]);
+            const updated = [...cart, { ...product, quantity: 1 }];
+            setCart(syncServiceItems(updated, products));
             toast.success(`Added ${product.name} to cart`);
         }
     };
@@ -320,14 +362,16 @@ export default function POSTerminal() {
         }
 
         if (existing) {
-            setCart(cart.map(item =>
+            const updated = cart.map(item =>
                 item.id === selectedProduct.id
                     ? { ...item, quantity: item.quantity + quantity }
                     : item
-            ));
+            );
+            setCart(syncServiceItems(updated, products));
             toast.success(`Updated ${selectedProduct.name} quantity`);
         } else {
-            setCart([...cart, { ...selectedProduct, quantity }]);
+            const updated = [...cart, { ...selectedProduct, quantity }];
+            setCart(syncServiceItems(updated, products));
             toast.success(`Added ${selectedProduct.name} to cart`);
         }
 
@@ -338,6 +382,10 @@ export default function POSTerminal() {
 
     const updateCartItemQty = (productId, newQty) => {
         const product = products.find(p => p.id === productId);
+        const cartItem = cart.find(i => i.id === productId);
+
+        // Service items are qty-locked (controlled by parent)
+        if (cartItem?._isService) return;
 
         if (newQty > product.stock) {
             toast.error(`Only ${product.stock} units available`);
@@ -349,12 +397,22 @@ export default function POSTerminal() {
             return;
         }
 
-        setCart(cart.map(item =>
+        const updated = cart.map(item =>
             item.id === productId ? { ...item, quantity: newQty } : item
-        ));
+        );
+        setCart(syncServiceItems(updated, products));
     };
 
     const handleRemoveFromCart = async (productId) => {
+        const cartItem = cart.find(i => i.id === productId);
+
+        // If it's a service item, remove it and mark as dismissed for this session
+        if (cartItem?._isService) {
+            removedServicesRef.current.add(productId);
+            setCart(prev => prev.filter(i => i.id !== productId));
+            return;
+        }
+
         const confirmed = await confirm({
             title: 'Remove Item',
             message: 'Are you sure you want to remove this item from the cart?',
@@ -364,7 +422,8 @@ export default function POSTerminal() {
         });
 
         if (confirmed) {
-            setCart(cart.filter(item => item.id !== productId));
+            const updated = cart.filter(item => item.id !== productId);
+            setCart(syncServiceItems(updated, products));
             toast.success('Item removed from cart');
         }
     };
@@ -380,6 +439,7 @@ export default function POSTerminal() {
 
         if (confirmed) {
             setCart([]);
+            removedServicesRef.current = new Set();
             toast.success('Cart cleared');
         }
     };
@@ -517,6 +577,7 @@ export default function POSTerminal() {
                 }
                 setLastReceipt(receiptData);
                 setCart([]);
+                removedServicesRef.current = new Set();
                 setDiscount(0);
                 setAmountReceived('');
                 setSelectedCharges([]);
@@ -1067,45 +1128,73 @@ export default function POSTerminal() {
                                 ) : (
                                     <div className="space-y-3">
                                         {cart.map(item => (
-                                            <div key={item.id} className="bg-slate-50 p-3 rounded-lg">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <p className="font-semibold text-slate-900 text-sm flex-1">{item.name}</p>
+                                            item._isService ? (
+                                                /* ── Service item (Pelleting / Crushing) ── */
+                                                <div key={item.id} className="ml-4 bg-purple-50 border border-purple-200 p-2.5 rounded-lg flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${item._serviceType === 'pelleting' ? 'bg-purple-200 text-purple-800' : 'bg-orange-200 text-orange-800'}`}>
+                                                            {item._serviceType === 'pelleting' ? '⚙ Pellet' : '🔨 Crush'}
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium text-purple-900 truncate">{item.name}</p>
+                                                            <p className="text-xs text-purple-600">
+                                                                {item.quantity} {item.unit || 'units'} &times; {window.getCurrencySymbol()}{item.price.toLocaleString()} = <span className="font-bold">{window.getCurrencySymbol()}{(item.price * item.quantity).toLocaleString()}</span>
+                                                                <span className="ml-1 italic opacity-70">(auto-synced)</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
                                                     <button
                                                         onClick={() => handleRemoveFromCart(item.id)}
-                                                        className="text-red-600 hover:text-red-700 ml-2"
+                                                        title="Remove service item"
+                                                        className="shrink-0 text-purple-400 hover:text-red-500"
                                                     >
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                         </svg>
                                                     </button>
                                                 </div>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
+                                            ) : (
+                                                /* ── Regular product item ── */
+                                                <div key={item.id} className="bg-slate-50 p-3 rounded-lg">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <p className="font-semibold text-slate-900 text-sm flex-1">{item.name}</p>
                                                         <button
-                                                            onClick={() => updateCartItemQty(item.id, item.quantity - 1)}
-                                                            className="w-7 h-7 flex items-center justify-center bg-white border-2 border-slate-300 rounded hover:bg-slate-50"
+                                                            onClick={() => handleRemoveFromCart(item.id)}
+                                                            className="text-red-600 hover:text-red-700 ml-2"
                                                         >
-                                                            -
-                                                        </button>
-                                                        <input
-                                                            type="number"
-                                                            value={item.quantity}
-                                                            onChange={(e) => updateCartItemQty(item.id, parseInt(e.target.value) || 0)}
-                                                            className="w-16 px-2 py-1 text-center border-2 border-slate-300 rounded focus:border-blue-600 focus:outline-none"
-                                                        />
-                                                        <button
-                                                            onClick={() => updateCartItemQty(item.id, item.quantity + 1)}
-                                                            className="w-7 h-7 flex items-center justify-center bg-white border-2 border-slate-300 rounded hover:bg-slate-50"
-                                                        >
-                                                            +
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
                                                         </button>
                                                     </div>
-                                                    <p className="font-mono font-bold text-blue-700">
-                                                        {window.getCurrencySymbol()}{(item.price * item.quantity).toLocaleString()}
-                                                    </p>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => updateCartItemQty(item.id, item.quantity - 1)}
+                                                                className="w-7 h-7 flex items-center justify-center bg-white border-2 border-slate-300 rounded hover:bg-slate-50"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <input
+                                                                type="number"
+                                                                value={item.quantity}
+                                                                onChange={(e) => updateCartItemQty(item.id, parseInt(e.target.value) || 0)}
+                                                                className="w-16 px-2 py-1 text-center border-2 border-slate-300 rounded focus:border-blue-600 focus:outline-none"
+                                                            />
+                                                            <button
+                                                                onClick={() => updateCartItemQty(item.id, item.quantity + 1)}
+                                                                className="w-7 h-7 flex items-center justify-center bg-white border-2 border-slate-300 rounded hover:bg-slate-50"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+                                                        <p className="font-mono font-bold text-blue-700">
+                                                            {window.getCurrencySymbol()}{(item.price * item.quantity).toLocaleString()}
+                                                        </p>
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 mt-1">{window.getCurrencySymbol()}{item.price.toLocaleString()} each</p>
                                                 </div>
-                                                <p className="text-xs text-slate-500 mt-1">{window.getCurrencySymbol()}{item.price.toLocaleString()} each</p>
-                                            </div>
+                                            )
                                         ))}
                                     </div>
                                 )}
@@ -1612,6 +1701,12 @@ export default function POSTerminal() {
                                     <div key={i} className="flex justify-between text-sm text-blue-700">
                                         <span>{c.name}:</span>
                                         <span className="font-mono">{window.getCurrencySymbol()}{c.amount.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                                {(lastReceipt.serviceCharges || []).map((sc, i) => (
+                                    <div key={i} className="flex justify-between text-sm text-purple-700">
+                                        <span>{sc.service_type === 'pelleting' ? '⚙' : '🔨'} {sc.product_name} ({sc.quantity} {sc.unit || 'units'}):</span>
+                                        <span className="font-mono">{window.getCurrencySymbol()}{sc.total.toLocaleString()}</span>
                                     </div>
                                 ))}
                                 <div className="flex justify-between text-lg font-bold border-t border-slate-300 pt-2">
