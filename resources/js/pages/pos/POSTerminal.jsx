@@ -75,6 +75,9 @@ export default function POSTerminal() {
     // ── POS Auto-Services (Pelleting / Crushing) ────────────────────────
     // Tracks which service product IDs the user has manually dismissed this session
     const removedServicesRef = useRef(new Set());
+    // Full unfiltered product list — never replaced by search results, so service
+    // products are always findable even when the display list is narrowed by search.
+    const allProductsRef = useRef([]);
 
     /**
      * Re-computes service cart items based on current regular items + product data.
@@ -83,8 +86,11 @@ export default function POSTerminal() {
      * Items in removedServicesRef are NOT re-added.
      */
     const syncServiceItems = (currentCart, productList) => {
-        const pelletProduct = productList.find(p => p.service_role === 'pelleting');
-        const crushProduct  = productList.find(p => p.service_role === 'crushing');
+        // Use the full product list so service products are found even when
+        // the display list has been narrowed by a search query.
+        const lookup = allProductsRef.current.length > 0 ? allProductsRef.current : productList;
+        const pelletProduct = lookup.find(p => p.service_role === 'pelleting');
+        const crushProduct  = lookup.find(p => p.service_role === 'crushing');
 
         let reqPelleting = 0;
         let reqCrushing  = 0;
@@ -174,7 +180,9 @@ export default function POSTerminal() {
                 loadPrintSettings(true),
             ]);
             
-            setProducts(productsRes.data || []);
+            const allProds = productsRes.data || [];
+            setProducts(allProds);
+            allProductsRef.current = allProds;
             setCustomers(customersRes.data || []);
             setCategories(categoriesRes.data || []);
             setPendingTickets(ticketsRes.data || []);
@@ -220,7 +228,13 @@ export default function POSTerminal() {
             if (search) params.search = search;
             
             const response = await posAPI.getProducts(params);
-            setProducts(response.data || []);
+            const fetched = response.data || [];
+            setProducts(fetched);
+            // Only update the full list when this is not a search-narrowed fetch,
+            // so service products remain findable by syncServiceItems.
+            if (!search) {
+                allProductsRef.current = fetched;
+            }
         } catch (error) {
             console.error('Error fetching products:', error);
         }
