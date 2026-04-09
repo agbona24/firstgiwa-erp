@@ -41,6 +41,8 @@ class Product extends Model
         'has_pelleting_crushing',
         'pelleting_price_per_unit',
         'crushing_price_per_unit',
+        'pos_service',
+        'service_role',
     ];
 
     protected $casts = [
@@ -53,6 +55,7 @@ class Product extends Model
         'has_pelleting_crushing' => 'boolean',
         'pelleting_price_per_unit' => 'decimal:2',
         'crushing_price_per_unit' => 'decimal:2',
+        // pos_service and service_role are plain strings (enums)
     ];
 
     /**

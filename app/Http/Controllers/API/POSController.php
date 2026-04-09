@@ -103,6 +103,8 @@ class POSController extends Controller
                 'has_pelleting_crushing' => (bool) $product->has_pelleting_crushing,
                 'pelleting_price_per_unit' => (float) $product->pelleting_price_per_unit,
                 'crushing_price_per_unit' => (float) $product->crushing_price_per_unit,
+                'pos_service' => $product->pos_service ?? 'none',
+                'service_role' => $product->service_role,
             ];
         });
 

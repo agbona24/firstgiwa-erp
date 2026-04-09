@@ -76,26 +76,21 @@ export default function POSTerminal() {
     // Tracks which service product IDs the user has manually dismissed this session
     const removedServicesRef = useRef(new Set());
 
-    /** Read service config from localStorage: { "productId": "pelleting"|"both" } */
-    const getPosServiceConfig = () => {
-        try { return JSON.parse(localStorage.getItem('pos_service_config') || '{}'); } catch(e) { return {}; }
-    };
-
     /**
-     * Re-computes service cart items based on current regular items + config.
-     * Service items are marked _isService:true and their quantity = sum of parent quantities.
+     * Re-computes service cart items based on current regular items + product data.
+     * Service products are identified by product.service_role ('pelleting' | 'crushing').
+     * Parent products trigger them via product.pos_service ('pelleting' | 'both').
      * Items in removedServicesRef are NOT re-added.
      */
     const syncServiceItems = (currentCart, productList) => {
-        const config = getPosServiceConfig();
-        const pelletProduct = productList.find(p => /pellet/i.test(p.name));
-        const crushProduct  = productList.find(p => /crush/i.test(p.name));
+        const pelletProduct = productList.find(p => p.service_role === 'pelleting');
+        const crushProduct  = productList.find(p => p.service_role === 'crushing');
 
         let reqPelleting = 0;
         let reqCrushing  = 0;
         currentCart.forEach(item => {
             if (item._isService) return;
-            const svc = config[String(item.id)];
+            const svc = item.pos_service || 'none';
             if (svc === 'pelleting' || svc === 'both') reqPelleting += item.quantity;
             if (svc === 'both') reqCrushing += item.quantity;
         });

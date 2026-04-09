@@ -41,6 +41,8 @@ class UpdateProductRequest extends FormRequest
             'image_url' => ['nullable', 'string', 'max:500'],
             'is_active' => ['boolean'],
             'track_inventory' => ['boolean'],
+            'pos_service' => ['nullable', Rule::in(['none', 'pelleting', 'both'])],
+            'service_role' => ['nullable', Rule::in(['pelleting', 'crushing'])],
         ];
     }
 
