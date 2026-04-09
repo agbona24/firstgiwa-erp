@@ -744,45 +744,82 @@ export default function InventoryList() {
                         <h4 className="font-semibold text-purple-900 mb-1 text-sm">POS Auto-Services</h4>
                         <p className="text-xs text-purple-700 mb-3">Configure how this product behaves at the POS terminal.</p>
 
-                        {/* service_role: marks this product AS a service (Pelleting or Crushing) */}
-                        <div className="mb-3">
-                            <label className="block text-sm font-medium text-purple-800 mb-1">This product IS a service</label>
+                        {/* PART 1 – Is this product itself a service? */}
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-purple-800 mb-1">This product IS a service item</label>
                             <select
                                 value={productForm.service_role}
                                 onChange={(e) => setProductForm({...productForm, service_role: e.target.value, pos_service: e.target.value ? 'none' : productForm.pos_service})}
                                 className="w-full px-4 py-2.5 border border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none bg-white text-sm"
                             >
-                                <option value="">Not a service product</option>
-                                <option value="pelleting">⚙ Pelleting service</option>
-                                <option value="crushing">🔨 Crushing service</option>
+                                <option value="">No – this is a regular product</option>
+                                <option value="pelleting">Yes – this is the Pelleting service product</option>
+                                <option value="crushing">Yes – this is the Crushing service product</option>
                             </select>
                             {productForm.service_role && (
-                                <p className="text-xs text-purple-600 mt-1">This product will be auto-added when a parent product requiring {productForm.service_role} is sold.</p>
+                                <p className="text-xs text-purple-600 mt-1 bg-purple-100 rounded px-2 py-1">
+                                    ✓ When any product with "{productForm.service_role}" auto-service is sold at the POS, <strong>{productForm.name || 'this product'}</strong> will be auto-added with the same quantity.
+                                </p>
                             )}
                         </div>
 
-                        {/* pos_service: on parent products, which services to auto-add */}
-                        {!productForm.service_role && (
-                            <div>
-                                <label className="block text-sm font-medium text-purple-800 mb-1">When sold, auto-add service</label>
-                                <select
-                                    value={productForm.pos_service}
-                                    onChange={(e) => setProductForm({...productForm, pos_service: e.target.value})}
-                                    className="w-full px-4 py-2.5 border border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none bg-white text-sm"
-                                >
-                                    <option value="none">None – no auto-service</option>
-                                    <option value="pelleting">Pelleting only</option>
-                                    <option value="both">Pelleting &amp; Crushing</option>
-                                </select>
-                                {productForm.pos_service !== 'none' && (
-                                    <p className="text-xs text-purple-600 mt-1">
-                                        {productForm.pos_service === 'pelleting'
-                                            ? 'Pelleting will auto-appear in the cart with the same quantity as this product.'
-                                            : 'Pelleting AND Crushing will auto-appear with the same quantity as this product.'}
-                                    </p>
-                                )}
-                            </div>
-                        )}
+                        {/* PART 2 – Which services to auto-add when THIS product is sold */}
+                        {!productForm.service_role && (() => {
+                            const pelletProd = allProducts.find(p => p.service_role === 'pelleting');
+                            const crushProd  = allProducts.find(p => p.service_role === 'crushing');
+                            const hasPellet  = productForm.pos_service === 'pelleting' || productForm.pos_service === 'both';
+                            const hasCrush   = productForm.pos_service === 'both';
+
+                            const togglePellet = (checked) => {
+                                if (checked) setProductForm({...productForm, pos_service: hasCrush ? 'both' : 'pelleting'});
+                                else setProductForm({...productForm, pos_service: 'none'});
+                            };
+                            const toggleCrush = (checked) => {
+                                if (checked) setProductForm({...productForm, pos_service: 'both'});
+                                else setProductForm({...productForm, pos_service: hasPellet ? 'pelleting' : 'none'});
+                            };
+
+                            return (
+                                <div>
+                                    <label className="block text-sm font-medium text-purple-800 mb-2">When sold at POS, auto-add these service items:</label>
+                                    <div className="space-y-2">
+                                        {/* Pelleting */}
+                                        <label className={`flex items-center gap-3 p-2.5 rounded-lg border ${pelletProd ? 'bg-white border-purple-200 cursor-pointer' : 'bg-slate-50 border-slate-200 cursor-not-allowed opacity-60'}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={hasPellet}
+                                                disabled={!pelletProd}
+                                                onChange={(e) => togglePellet(e.target.checked)}
+                                                className="w-4 h-4 text-purple-600 rounded border-purple-300"
+                                            />
+                                            <div className="flex-1">
+                                                {pelletProd
+                                                    ? <><span className="text-sm font-medium text-slate-900">⚙ {pelletProd.name}</span><span className="text-xs text-slate-500 ml-2">({pelletProd.unit || 'unit'})</span></>
+                                                    : <span className="text-sm text-slate-500 italic">Pelleting – not set up yet. Edit your pelleting product and mark it as "Pelleting service" above.</span>
+                                                }
+                                            </div>
+                                        </label>
+
+                                        {/* Crushing */}
+                                        <label className={`flex items-center gap-3 p-2.5 rounded-lg border ${crushProd ? 'bg-white border-purple-200 cursor-pointer' : 'bg-slate-50 border-slate-200 cursor-not-allowed opacity-60'}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={hasCrush}
+                                                disabled={!crushProd}
+                                                onChange={(e) => toggleCrush(e.target.checked)}
+                                                className="w-4 h-4 text-purple-600 rounded border-purple-300"
+                                            />
+                                            <div className="flex-1">
+                                                {crushProd
+                                                    ? <><span className="text-sm font-medium text-slate-900">🔨 {crushProd.name}</span><span className="text-xs text-slate-500 ml-2">({crushProd.unit || 'unit'})</span></>
+                                                    : <span className="text-sm text-slate-500 italic">Crushing – not set up yet. Edit your crushing product and mark it as "Crushing service" above.</span>
+                                                }
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="flex gap-3 pt-4 border-t">
