@@ -169,10 +169,14 @@ class POSController extends Controller
      */
     public function customers(Request $request)
     {
-        // Fields needed for POS including credit info and wallet
-        $customerFields = ['id', 'name', 'phone', 'email', 'customer_type', 'credit_limit', 'outstanding_balance', 'wallet_balance', 'credit_blocked', 'payment_terms_days'];
+        $tenantId = Auth::user()->tenant_id;
 
-        $query = Customer::where('is_active', true);
+        // Fields needed for POS including credit info and wallet
+        $customerFields = ['id', 'name', 'phone', 'email', 'customer_type', 'credit_limit', 'outstanding_balance', 'wallet_balance', 'credit_blocked', 'payment_terms_days', 'is_active'];
+
+        $query = Customer::when($tenantId, function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            });
 
         // Search
         if ($request->has('search')) {
@@ -185,8 +189,10 @@ class POSController extends Controller
         }
 
         // Get walk-in customer first, then other customers
-        $walkInCustomer = Customer::where('customer_type', 'walk-in')
-            ->where('is_active', true)
+        $walkInCustomer = Customer::when($tenantId, function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            })
+            ->where('customer_type', 'walk-in')
             ->first($customerFields);
 
         $customers = $query->where('customer_type', '!=', 'walk-in')

@@ -15,6 +15,14 @@ class CustomerService extends BaseService
     {
         $query = Customer::query()->with(['salesOrders', 'formulas', 'creditFacilityType']);
 
+        // Tenant scoping — only show customers belonging to this tenant or global (null) ones
+        $tenantId = $this->user()?->tenant_id;
+        if ($tenantId) {
+            $query->where(function ($q) use ($tenantId) {
+                $q->where('tenant_id', $tenantId)->orWhereNull('tenant_id');
+            });
+        }
+
         // Search
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -143,6 +151,9 @@ class CustomerService extends BaseService
                     $data['payment_terms_days'] = $data['payment_terms_days'] ?? $facilityType->payment_terms_in_days;
                 }
             }
+
+            // Never allow tenant_id to be changed after creation
+            unset($data['tenant_id']);
 
             $customer->update($data);
 
