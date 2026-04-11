@@ -202,7 +202,6 @@ class POSController extends Controller
         
         $customers = $query->where('customer_type', '!=', 'walk-in')
             ->orderBy('name')
-            ->take(50)
             ->get($customerFields);
 
         // Put walk-in customer first if it exists
