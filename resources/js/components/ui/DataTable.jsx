@@ -1,14 +1,58 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import EmptyState from './EmptyState';
 
 function ActionDropdown({ actions, row, openId, setOpenId }) {
     const id = row.id ?? row._idx;
     const open = openId === id;
     const visible = actions.filter(a => !a.show || a.show(row));
+    const btnRef = useRef(null);
+    const [menuStyle, setMenuStyle] = useState({});
+
+    useEffect(() => {
+        if (open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            const menuHeight = visible.length * 38 + 16; // approx height
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const openUpward = spaceBelow < menuHeight && rect.top > menuHeight;
+
+            if (openUpward) {
+                setMenuStyle({
+                    position: 'fixed',
+                    bottom: window.innerHeight - rect.top + 4,
+                    right: window.innerWidth - rect.right,
+                    zIndex: 9999,
+                });
+            } else {
+                setMenuStyle({
+                    position: 'fixed',
+                    top: rect.bottom + 4,
+                    right: window.innerWidth - rect.right,
+                    zIndex: 9999,
+                });
+            }
+        }
+    }, [open, visible.length]);
+
     if (visible.length === 0) return null;
+
+    const variantStyles = {
+        danger:  'text-red-600 hover:bg-red-50',
+        info:    'text-blue-600 hover:bg-blue-50',
+        success: 'text-green-600 hover:bg-green-50',
+        warning: 'text-amber-600 hover:bg-amber-50',
+    };
+    const dotColors = {
+        danger:  'bg-red-400',
+        info:    'bg-blue-400',
+        success: 'bg-green-400',
+        warning: 'bg-amber-400',
+    };
+
     return (
         <div className="relative">
             <button
+                ref={btnRef}
                 onClick={(e) => { e.stopPropagation(); setOpenId(open ? null : id); }}
                 className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium text-sm flex items-center gap-1"
             >
@@ -17,29 +61,16 @@ function ActionDropdown({ actions, row, openId, setOpenId }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
-            {open && (
+            {open && createPortal(
                 <>
-                    <div className="fixed inset-0 z-40" onClick={() => setOpenId(null)}></div>
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-xl py-1 min-w-[180px]">
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setOpenId(null)} />
+                    <div style={menuStyle} className="bg-white border border-slate-200 rounded-lg shadow-xl py-1 min-w-[180px]">
                         {visible.map((action, i) => {
                             const label = typeof action.label === 'function' ? action.label(row) : action.label;
                             const variant = typeof action.variant === 'function' ? action.variant(row) : action.variant;
                             const prevAction = visible[i - 1];
                             const prevVariant = prevAction ? (typeof prevAction.variant === 'function' ? prevAction.variant(row) : prevAction.variant) : null;
                             const showDivider = i > 0 && variant === 'danger' && prevVariant !== 'danger';
-
-                            const variantStyles = {
-                                danger:  'text-red-600 hover:bg-red-50',
-                                info:    'text-blue-600 hover:bg-blue-50',
-                                success: 'text-green-600 hover:bg-green-50',
-                                warning: 'text-amber-600 hover:bg-amber-50',
-                            };
-                            const dotColors = {
-                                danger:  'bg-red-400',
-                                info:    'bg-blue-400',
-                                success: 'bg-green-400',
-                                warning: 'bg-amber-400',
-                            };
                             const textClass = variantStyles[variant] || 'text-slate-700 hover:bg-slate-50';
                             const dotClass = dotColors[variant];
 
@@ -57,7 +88,8 @@ function ActionDropdown({ actions, row, openId, setOpenId }) {
                             );
                         })}
                     </div>
-                </>
+                </>,
+                document.body
             )}
         </div>
     );
