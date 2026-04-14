@@ -1883,8 +1883,8 @@ export default function POSTerminal() {
                                         <Badge variant="pending">Pending</Badge>
                                     </div>
                                     <div className="text-sm text-slate-700 mb-1">
-                                        <span className="font-medium">{ticket.customer.name}</span>
-                                        {ticket.customer.phone && <span className="text-slate-500 ml-2">{ticket.customer.phone}</span>}
+                                        <span className="font-medium">{ticket.customer?.name || 'Walk-in Customer'}</span>
+                                        {ticket.customer?.phone && <span className="text-slate-500 ml-2">{ticket.customer.phone}</span>}
                                     </div>
                                     <div className="text-xs text-slate-500 mb-2">{ticket.date}</div>
                                     <div className="text-xs text-slate-600 mb-3">
