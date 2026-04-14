@@ -795,14 +795,14 @@ export default function PurchaseOrderList() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Supplier *</label>
                             <select required value={formData.supplier_id} onChange={(e) => setFormData({...formData, supplier_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                 <option value="">Select supplier...</option>
-                                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                {suppliers.filter(Boolean).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Warehouse *</label>
                             <select required value={formData.warehouse_id} onChange={(e) => setFormData({...formData, warehouse_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                 <option value="">Select warehouse...</option>
-                                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                {warehouses.filter(Boolean).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                             </select>
                         </div>
                         <div>
@@ -827,7 +827,7 @@ export default function PurchaseOrderList() {
                                         {idx === 0 && <label className="block text-xs font-medium text-slate-500 mb-1">Product</label>}
                                         <select required value={item.product_id} onChange={(e) => updateLineItem(idx, 'product_id', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-500 focus:outline-none">
                                             <option value="">Select...</option>
-                                            {products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
+                                            {products.filter(Boolean).map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="col-span-2">
@@ -878,14 +878,14 @@ export default function PurchaseOrderList() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Supplier *</label>
                             <select required value={formData.supplier_id} onChange={(e) => setFormData({...formData, supplier_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                 <option value="">Select supplier...</option>
-                                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                {suppliers.filter(Boolean).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Warehouse *</label>
                             <select required value={formData.warehouse_id} onChange={(e) => setFormData({...formData, warehouse_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                 <option value="">Select warehouse...</option>
-                                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                {warehouses.filter(Boolean).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                             </select>
                         </div>
                         <div>
@@ -906,7 +906,7 @@ export default function PurchaseOrderList() {
                                         {idx === 0 && <label className="block text-xs font-medium text-slate-500 mb-1">Product</label>}
                                         <select required value={item.product_id} onChange={(e) => updateLineItem(idx, 'product_id', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-500 focus:outline-none">
                                             <option value="">Select...</option>
-                                            {products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
+                                            {products.filter(Boolean).map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="col-span-2">

@@ -362,7 +362,7 @@ export default function ExpenseList() {
 
             <div className="flex flex-wrap items-center gap-3">
                 <SearchBar onSearch={setSearch} placeholder="Search expenses..." />
-                <FilterDropdown label="Category" value={categoryFilter} onChange={setCategoryFilter} options={categories.map(c => ({ value: c.id.toString(), label: c.name }))} />
+                <FilterDropdown label="Category" value={categoryFilter} onChange={setCategoryFilter} options={categories.filter(Boolean).map(c => ({ value: c.id.toString(), label: c.name }))} />
                 <FilterDropdown label="Status" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: 'pending', label: 'Pending' },
                     { value: 'approved', label: 'Approved' },
@@ -447,7 +447,7 @@ export default function ExpenseList() {
                         <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
                         <select required value={formData.expense_category_id} onChange={(e) => setFormData({...formData, expense_category_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                             <option value="">Select category...</option>
-                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {categories.filter(Boolean).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
                     <div>

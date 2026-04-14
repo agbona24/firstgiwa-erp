@@ -93,7 +93,7 @@ function StaffForm({ formData, setFormData, deptNames, branches, onSubmit, submi
                             <label className="block text-sm font-medium text-slate-700 mb-1">Branch</label>
                             <select value={formData.branch_id} onChange={handleChange('branch_id')} className={inputClass}>
                                 <option value="">Select branch...</option>
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                {branches.filter(Boolean).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
                         </div>
                     )}
@@ -376,7 +376,7 @@ export default function StaffList() {
 
     // Department names for dropdown
     const deptNames = useMemo(() => {
-        return departments.filter(d => d.is_active !== false).map(d => d.name).sort();
+        return departments.filter(Boolean).filter(d => d.is_active !== false).map(d => d.name).sort();
     }, [departments]);
 
     // Populate form from staff member

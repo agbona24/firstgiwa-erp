@@ -432,7 +432,7 @@ export default function FormulaList() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Customer (optional)</label>
                             <select value={formData.customer_id} onChange={(e) => setFormData({...formData, customer_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                 <option value="">General (All Customers)</option>
-                                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                {customers.filter(Boolean).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
                     </div>
@@ -449,7 +449,7 @@ export default function FormulaList() {
                                 <div key={idx} className="flex items-center gap-3">
                                     <select value={item.product_id} onChange={(e) => updateItem(idx, 'product_id', e.target.value)} className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                         <option value="">Select product...</option>
-                                        {products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
+                                        {products.filter(Boolean).map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
                                     </select>
                                     <input type="number" step="0.1" min="0" max="100" value={item.percentage} onChange={(e) => updateItem(idx, 'percentage', e.target.value)} className="w-24 px-3 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 text-center" placeholder="%" />
                                     {formulaItems.length > 1 && (
@@ -482,7 +482,7 @@ export default function FormulaList() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Customer (optional)</label>
                             <select value={formData.customer_id} onChange={(e) => setFormData({...formData, customer_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                 <option value="">General (All Customers)</option>
-                                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                {customers.filter(Boolean).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
                     </div>
@@ -499,7 +499,7 @@ export default function FormulaList() {
                                 <div key={idx} className="flex items-center gap-3">
                                     <select value={item.product_id} onChange={(e) => updateItem(idx, 'product_id', e.target.value)} className="flex-1 px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                                         <option value="">Select product...</option>
-                                        {products.map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
+                                        {products.filter(Boolean).map(p => <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>)}
                                     </select>
                                     <input type="number" step="0.1" min="0" max="100" value={item.percentage} onChange={(e) => updateItem(idx, 'percentage', e.target.value)} className="w-24 px-3 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 text-center" placeholder="%" />
                                     {formulaItems.length > 1 && (

@@ -115,7 +115,7 @@ export default function UserList() {
     };
 
     const roleOptions = useMemo(() => {
-        return roles.map(role => ({ value: role.name, label: role.name }));
+        return roles.filter(Boolean).map(role => ({ value: role.name, label: role.name }));
     }, [roles]);
 
     const statusOptions = [
