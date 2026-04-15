@@ -59,9 +59,9 @@ export default function POSTerminal() {
     const [selectedSaleCategoryId, setSelectedSaleCategoryId] = useState('');
 
     // Items Brought by customer (for crushing / mixing)
-    const [customerItems, setCustomerItems] = useState([{ name: '', quantity: '' }]);
+    const [customerItems, setCustomerItems] = useState([{ name: '', quantity: '', service: 'both' }]);
 
-    const addCustomerItemRow = () => setCustomerItems(prev => [...prev, { name: '', quantity: '' }]);
+    const addCustomerItemRow = () => setCustomerItems(prev => [...prev, { name: '', quantity: '', service: 'both' }]);
     const updateCustomerItem = (idx, field, value) =>
         setCustomerItems(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
     const removeCustomerItemRow = (idx) =>
@@ -83,17 +83,19 @@ export default function POSTerminal() {
      * Re-computes service cart items based on current regular items + product data.
      * Service products are identified by product.service_role ('pelleting' | 'crushing').
      * Parent products trigger them via product.pos_service ('pelleting' | 'both').
+     * broughtPelletQty: qty of brought items needing pelleting (pelleting-only or both).
+     * broughtCrushQty:  qty of brought items needing crushing (both only).
      * Items in removedServicesRef are NOT re-added.
      */
-    const syncServiceItems = (currentCart, productList) => {
+    const syncServiceItems = (currentCart, productList, broughtPelletQty = 0, broughtCrushQty = 0) => {
         // Use the full product list so service products are found even when
         // the display list has been narrowed by a search query.
         const lookup = allProductsRef.current.length > 0 ? allProductsRef.current : productList;
         const pelletProduct = lookup.find(p => p.service_role === 'pelleting');
         const crushProduct  = lookup.find(p => p.service_role === 'crushing');
 
-        let reqPelleting = 0;
-        let reqCrushing  = 0;
+        let reqPelleting = broughtPelletQty;
+        let reqCrushing  = broughtCrushQty;
         currentCart.forEach(item => {
             if (item._isService) return;
             const svc = item.pos_service || 'none';
@@ -111,6 +113,20 @@ export default function POSTerminal() {
         }
         return result;
     };
+
+    /** Quantity of brought items needing pelleting (pelleting-only or both) */
+    const getBroughtPelletingQty = (items = customerItems) =>
+        items.reduce((sum, r) => {
+            const svc = r.service || 'both';
+            return sum + ((svc === 'pelleting' || svc === 'both') ? (parseFloat(r.quantity) || 0) : 0);
+        }, 0);
+
+    /** Quantity of brought items needing crushing (both only) */
+    const getBroughtCrushingQty = (items = customerItems) =>
+        items.reduce((sum, r) => {
+            const svc = r.service || 'both';
+            return sum + (svc === 'both' ? (parseFloat(r.quantity) || 0) : 0);
+        }, 0);
     // ────────────────────────────────────────────────────────────────────
 
     const toast = useToast();
@@ -299,6 +315,15 @@ export default function POSTerminal() {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
+    // Re-sync service items (pelleting/crushing) whenever customer-brought
+    // quantities change.
+    useEffect(() => {
+        const pQty = getBroughtPelletingQty(customerItems);
+        const cQty = getBroughtCrushingQty(customerItems);
+        setCart(prev => syncServiceItems(prev, products, pQty, cQty));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [customerItems]);
+
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyPress = (e) => {
@@ -351,12 +376,12 @@ export default function POSTerminal() {
                     ? { ...item, quantity: item.quantity + 1 }
                     : item
             );
-            setCart(syncServiceItems(updated, products));
+            setCart(syncServiceItems(updated, products, getBroughtPelletingQty(), getBroughtCrushingQty()));
             toast.success(`Added another ${product.name}`);
         } else {
             // Add new item with quantity 1
             const updated = [...cart, { ...product, quantity: 1 }];
-            setCart(syncServiceItems(updated, products));
+            setCart(syncServiceItems(updated, products, getBroughtPelletingQty(), getBroughtCrushingQty()));
             toast.success(`Added ${product.name} to cart`);
         }
     };
@@ -376,11 +401,11 @@ export default function POSTerminal() {
                     ? { ...item, quantity: item.quantity + quantity }
                     : item
             );
-            setCart(syncServiceItems(updated, products));
+            setCart(syncServiceItems(updated, products, getBroughtPelletingQty(), getBroughtCrushingQty()));
             toast.success(`Updated ${selectedProduct.name} quantity`);
         } else {
             const updated = [...cart, { ...selectedProduct, quantity }];
-            setCart(syncServiceItems(updated, products));
+            setCart(syncServiceItems(updated, products, getBroughtPelletingQty(), getBroughtCrushingQty()));
             toast.success(`Added ${selectedProduct.name} to cart`);
         }
 
@@ -409,7 +434,7 @@ export default function POSTerminal() {
         const updated = cart.map(item =>
             item.id === productId ? { ...item, quantity: newQty } : item
         );
-        setCart(syncServiceItems(updated, products));
+        setCart(syncServiceItems(updated, products, getBroughtPelletingQty(), getBroughtCrushingQty()));
     };
 
     const handleRemoveFromCart = async (productId) => {
@@ -432,7 +457,7 @@ export default function POSTerminal() {
 
         if (confirmed) {
             const updated = cart.filter(item => item.id !== productId);
-            setCart(syncServiceItems(updated, products));
+            setCart(syncServiceItems(updated, products, getBroughtPelletingQty(), getBroughtCrushingQty()));
             toast.success('Item removed from cart');
         }
     };
@@ -1241,6 +1266,14 @@ export default function POSTerminal() {
                                                 placeholder="Qty"
                                                 className="w-20 px-2 py-1.5 text-sm border border-amber-300 rounded focus:border-amber-500 focus:outline-none bg-white text-center"
                                             />
+                                            <select
+                                                value={row.service || 'both'}
+                                                onChange={e => updateCustomerItem(idx, 'service', e.target.value)}
+                                                className="w-28 px-1 py-1.5 text-xs border border-amber-300 rounded focus:border-amber-500 focus:outline-none bg-white"
+                                            >
+                                                <option value="pelleting">Pelleting</option>
+                                                <option value="both">Crush + Pellet</option>
+                                            </select>
                                             <button
                                                 type="button"
                                                 onClick={() => removeCustomerItemRow(idx)}
