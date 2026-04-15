@@ -222,7 +222,7 @@ class POSController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:1',
             'items.*.price' => 'required|numeric|min:0',
-            'payment_method' => 'required|in:cash,card,transfer,split,credit,wallet',
+            'payment_method' => 'required|in:cash,card,transfer,bank_transfer,split,credit,wallet',
             'discount' => 'nullable|numeric|min:0',
             'discount_type' => 'nullable|in:percentage,fixed',
             'customer_id' => 'required|exists:customers,id',
@@ -245,6 +245,11 @@ class POSController extends Controller
         $tenantId = Auth::user()->tenant_id;
         $branchId = $request->input('branch_id', Auth::user()->branch_id);
         $user = Auth::user();
+
+        // Normalise legacy 'transfer' → 'bank_transfer' to match payments ENUM
+        if ($request->payment_method === 'transfer') {
+            $request->merge(['payment_method' => 'bank_transfer']);
+        }
 
         // Check if credit sale and validate customer credit
         $isCredit = $request->payment_method === 'credit';
@@ -321,7 +326,8 @@ class POSController extends Controller
             $paymentTypeMap = [
                 'cash'     => 'cash',
                 'card'     => 'card',
-                'transfer' => 'transfer',
+                'transfer'     => 'bank_transfer',
+                'bank_transfer' => 'bank_transfer',
                 'split'    => 'cash',
                 'credit'   => 'credit',
                 'wallet'   => 'wallet',

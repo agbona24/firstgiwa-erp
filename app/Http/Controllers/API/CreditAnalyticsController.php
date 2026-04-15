@@ -115,7 +115,7 @@ class CreditAnalyticsController extends Controller
         $request->validate([
             'transaction_id' => 'required|exists:customer_credit_transactions,id',
             'amount' => 'required|numeric|min:0.01',
-            'payment_method' => 'required|in:cash,transfer,pos,cheque',
+            'payment_method' => 'required|in:cash,bank_transfer,pos,cheque',
             'payment_reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -221,7 +221,7 @@ class CreditAnalyticsController extends Controller
         $request->validate([
             'customer_id' => 'required|exists:customers,id',
             'amount' => 'required|numeric|min:0.01',
-            'payment_method' => 'required|in:cash,transfer,pos,cheque',
+            'payment_method' => 'required|in:cash,bank_transfer,pos,cheque',
             'bank_account_id' => 'nullable|exists:bank_accounts,id',
             'reference' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
