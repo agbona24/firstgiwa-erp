@@ -112,7 +112,7 @@ export default function CreditPayments() {
             return;
         }
 
-        if (paymentData.payment_method === 'transfer' && !paymentData.bank_account_id) {
+        if (paymentData.payment_method === 'bank_transfer' && !paymentData.bank_account_id) {
             toast.error('Please select a bank account for transfer');
             return;
         }
@@ -405,7 +405,7 @@ export default function CreditPayments() {
                         <div>
                             <label className={labelClass}>Payment Method</label>
                             <div className="grid grid-cols-3 gap-2">
-                                {['cash', 'transfer', 'pos'].map(method => (
+                                {['cash', 'bank_transfer', 'pos'].map(method => (
                                     <button
                                         key={method}
                                         type="button"
@@ -416,14 +416,14 @@ export default function CreditPayments() {
                                                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                         }`}
                                     >
-                                        {method === 'pos' ? 'POS/Card' : method === 'transfer' ? 'Transfer' : 'Cash'}
+                                        {method === 'pos' ? 'POS/Card' : method === 'bank_transfer' ? 'Transfer' : 'Cash'}
                                     </button>
                                 ))}
                             </div>
                         </div>
 
                         {/* Bank Account for Transfer */}
-                        {paymentData.payment_method === 'transfer' && (
+                        {paymentData.payment_method === 'bank_transfer' && (
                             <div>
                                 <label className={labelClass}>Bank Account</label>
                                 <select
