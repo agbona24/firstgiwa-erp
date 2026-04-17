@@ -81,8 +81,11 @@ export default function POSTerminal() {
 
     /**
      * Re-computes service cart items based on current regular items + product data.
-     * Service products are identified by product.service_role ('pelleting' | 'crushing').
-     * Parent products trigger them via product.pos_service ('pelleting' | 'both').
+     * Service products are identified by product.service_role:
+     *   'pelleting'    – auto-added for inventory items sold at POS
+     *   'crushing'     – auto-added for inventory items sold at POS
+     *   'pelleting_ib' – auto-added for Items Brought (pelleting or both)
+     *   'crushing_ib'  – auto-added for Items Brought (both / crush+pellet)
      * broughtPelletQty: qty of brought items needing pelleting (pelleting-only or both).
      * broughtCrushQty:  qty of brought items needing crushing (both only).
      * Items in removedServicesRef are NOT re-added.
@@ -91,11 +94,14 @@ export default function POSTerminal() {
         // Use the full product list so service products are found even when
         // the display list has been narrowed by a search query.
         const lookup = allProductsRef.current.length > 0 ? allProductsRef.current : productList;
-        const pelletProduct = lookup.find(p => p.service_role === 'pelleting');
-        const crushProduct  = lookup.find(p => p.service_role === 'crushing');
+        const pelletProduct   = lookup.find(p => p.service_role === 'pelleting');
+        const crushProduct    = lookup.find(p => p.service_role === 'crushing');
+        const pelletIBProduct = lookup.find(p => p.service_role === 'pelleting_ib');
+        const crushIBProduct  = lookup.find(p => p.service_role === 'crushing_ib');
 
-        let reqPelleting = broughtPelletQty;
-        let reqCrushing  = broughtCrushQty;
+        // Inventory items drive the standard service quantities
+        let reqPelleting = 0;
+        let reqCrushing  = 0;
         currentCart.forEach(item => {
             if (item._isService) return;
             const svc = item.pos_service || 'none';
@@ -105,11 +111,19 @@ export default function POSTerminal() {
 
         // Strip old service items, then re-append updated ones
         let result = currentCart.filter(i => !i._isService);
+        // Inventory-item services
         if (pelletProduct && reqPelleting > 0 && !removedServicesRef.current.has(pelletProduct.id)) {
             result.push({ ...pelletProduct, quantity: reqPelleting, _isService: true, _serviceType: 'pelleting' });
         }
         if (crushProduct && reqCrushing > 0 && !removedServicesRef.current.has(crushProduct.id)) {
             result.push({ ...crushProduct, quantity: reqCrushing, _isService: true, _serviceType: 'crushing' });
+        }
+        // Items-Brought services
+        if (pelletIBProduct && broughtPelletQty > 0 && !removedServicesRef.current.has(pelletIBProduct.id)) {
+            result.push({ ...pelletIBProduct, quantity: broughtPelletQty, _isService: true, _serviceType: 'pelleting' });
+        }
+        if (crushIBProduct && broughtCrushQty > 0 && !removedServicesRef.current.has(crushIBProduct.id)) {
+            result.push({ ...crushIBProduct, quantity: broughtCrushQty, _isService: true, _serviceType: 'crushing' });
         }
         return result;
     };

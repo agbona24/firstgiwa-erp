@@ -190,6 +190,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/{customer}/wallet/deposit', [CustomerWalletController::class, 'deposit']);
             Route::get('/{customer}/wallet/transactions', [CustomerWalletController::class, 'transactions']);
             Route::get('/{customer}/wallet/balance', [CustomerWalletController::class, 'balance']);
+            Route::put('/{customer}/wallet/transactions/{transaction}', [CustomerWalletController::class, 'updateDeposit']);
         });
         Route::apiResource('customers', CustomerController::class);
 

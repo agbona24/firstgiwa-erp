@@ -47,6 +47,12 @@ export default function CustomerList() {
     const [showWalletHistory, setShowWalletHistory] = useState(false);
     const [walletHistoryCustomer, setWalletHistoryCustomer] = useState(null);
 
+    // Wallet edit
+    const [showEditTxn, setShowEditTxn] = useState(false);
+    const [editTxn, setEditTxn] = useState(null);
+    const [editTxnSubmitting, setEditTxnSubmitting] = useState(false);
+    const [editTxnForm, setEditTxnForm] = useState({ amount: '', payment_method: 'cash', bank_account_id: '', payment_reference: '', notes: '' });
+
     // Fetch customers from API
     useEffect(() => {
         fetchCustomers();
@@ -249,6 +255,37 @@ export default function CustomerList() {
             toast.error(error.response?.data?.message || 'Failed to top up wallet');
         } finally {
             setTopUpSubmitting(false);
+        }
+    };
+
+    const handleEditTxn = async () => {
+        if (!editTxn || !walletHistoryCustomer) return;
+        setEditTxnSubmitting(true);
+        try {
+            const payload = {
+                amount: parseFloat(editTxnForm.amount),
+                payment_method: editTxnForm.payment_method,
+                payment_reference: editTxnForm.payment_reference || undefined,
+                notes: editTxnForm.notes || undefined,
+            };
+            if (editTxnForm.payment_method === 'bank_transfer' && editTxnForm.bank_account_id) {
+                payload.bank_account_id = parseInt(editTxnForm.bank_account_id);
+            }
+            const res = await customerAPI.updateWalletTransaction(walletHistoryCustomer.id, editTxn.id, payload);
+            toast.success('Wallet transaction updated');
+            setShowEditTxn(false);
+            setEditTxn(null);
+            // Refresh history list and header balance
+            const histRes = await customerAPI.getWalletTransactions(walletHistoryCustomer.id);
+            const list = histRes?.data?.data || histRes?.data || [];
+            setWalletHistory(Array.isArray(list) ? list : []);
+            setWalletHistoryCustomer(prev => ({ ...prev, wallet_balance: res?.data?.new_balance ?? prev.wallet_balance }));
+            fetchCustomers();
+        } catch (error) {
+            console.error('Error updating wallet transaction:', error);
+            toast.error(error.response?.data?.message || 'Failed to update transaction');
+        } finally {
+            setEditTxnSubmitting(false);
         }
     };
 
@@ -784,7 +821,16 @@ export default function CustomerList() {
                             <p className="text-center text-slate-400 py-8">No wallet transactions yet.</p>
                         ) : (
                             <table className="w-full text-sm">
-                                <thead><tr className="border-b text-left text-slate-500"><th className="py-2">Date</th><th>Reference</th><th>Type</th><th className="text-right">Amount</th><th className="text-right">Balance After</th></tr></thead>
+                                <thead>
+                                    <tr className="border-b text-left text-slate-500">
+                                        <th className="py-2">Date</th>
+                                        <th>Reference</th>
+                                        <th>Type</th>
+                                        <th className="text-right">Amount</th>
+                                        <th className="text-right">Balance After</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
                                 <tbody>
                                     {walletHistory.map((t, i) => (
                                         <tr key={i} className="border-b">
@@ -793,12 +839,77 @@ export default function CustomerList() {
                                             <td><Badge variant={t.type === 'deposit' ? 'approved' : t.type === 'purchase' ? 'pending' : 'draft'}>{t.type}</Badge></td>
                                             <td className={`text-right font-semibold ${t.type === 'deposit' ? 'text-green-600' : 'text-red-600'}`}>{t.type === 'deposit' ? '+' : '-'}{fmt(t.amount)}</td>
                                             <td className="text-right">{fmt(t.balance_after)}</td>
+                                            <td className="text-right">
+                                                {t.type === 'deposit' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditTxn(t);
+                                                            setEditTxnForm({
+                                                                amount: t.amount,
+                                                                payment_method: t.payment_method || 'cash',
+                                                                bank_account_id: t.bank_account_id || '',
+                                                                payment_reference: t.payment_reference || '',
+                                                                notes: t.notes || '',
+                                                            });
+                                                            setShowEditTxn(true);
+                                                        }}
+                                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         )}
                     </div>
+                )}
+            </SlideOut>
+
+            {/* Edit Wallet Transaction SlideOut */}
+            <SlideOut isOpen={showEditTxn} onClose={() => { setShowEditTxn(false); setEditTxn(null); }} title="Edit Wallet Top-Up" size="md">
+                {editTxn && (
+                    <form onSubmit={(e) => { e.preventDefault(); handleEditTxn(); }} className="space-y-4">
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                            Editing <span className="font-mono font-semibold">{editTxn.reference}</span>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Amount</label>
+                            <input type="number" min="0.01" step="0.01" required value={editTxnForm.amount} onChange={(e) => setEditTxnForm({...editTxnForm, amount: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="e.g. 50000" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
+                            <select value={editTxnForm.payment_method} onChange={(e) => setEditTxnForm({...editTxnForm, payment_method: e.target.value, bank_account_id: ''})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                <option value="cash">Cash</option>
+                                <option value="bank_transfer">Bank Transfer</option>
+                                <option value="pos">POS / Card</option>
+                                <option value="cheque">Cheque</option>
+                            </select>
+                        </div>
+                        {editTxnForm.payment_method === 'bank_transfer' && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Bank Account</label>
+                                <select value={editTxnForm.bank_account_id} onChange={(e) => setEditTxnForm({...editTxnForm, bank_account_id: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                    <option value="">-- Select Bank Account --</option>
+                                    {bankAccounts.map(b => (
+                                        <option key={b.id} value={b.id}>{b.bank_name} - {b.account_number} ({b.account_name})</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Payment Reference</label>
+                            <input type="text" value={editTxnForm.payment_reference} onChange={(e) => setEditTxnForm({...editTxnForm, payment_reference: e.target.value})} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="e.g. Teller number, cheque number..." />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+                            <textarea value={editTxnForm.notes} onChange={(e) => setEditTxnForm({...editTxnForm, notes: e.target.value})} rows={2} className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="Optional notes..." />
+                        </div>
+                        <Button type="submit" disabled={editTxnSubmitting}>{editTxnSubmitting ? 'Saving...' : 'Save Changes'}</Button>
+                    </form>
                 )}
             </SlideOut>
 

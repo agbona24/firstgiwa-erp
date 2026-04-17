@@ -135,6 +135,10 @@ const customerAPI = {
         const response = await api.get(`/customers/${id}/wallet/balance`);
         return response.data.data;
     },
+    updateWalletTransaction: async (customerId, transactionId, data) => {
+        const response = await api.put(`/customers/${customerId}/wallet/transactions/${transactionId}`, data);
+        return response.data;
+    },
 };
 
 // Credit Analytics API (global)

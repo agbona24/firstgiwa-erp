@@ -753,12 +753,17 @@ export default function InventoryList() {
                                 className="w-full px-4 py-2.5 border border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none bg-white text-sm"
                             >
                                 <option value="">No – this is a regular product</option>
-                                <option value="pelleting">Yes – this is the Pelleting service product</option>
-                                <option value="crushing">Yes – this is the Crushing service product</option>
+                                <option value="pelleting">Yes – Pelleting service (for inventory items)</option>
+                                <option value="crushing">Yes – Crushing service (for inventory items)</option>
+                                <option value="pelleting_ib">Yes – Pelleting service (for Items Brought)</option>
+                                <option value="crushing_ib">Yes – Crushing service (for Items Brought)</option>
                             </select>
                             {productForm.service_role && (
                                 <p className="text-xs text-purple-600 mt-1 bg-purple-100 rounded px-2 py-1">
-                                    ✓ When any product with "{productForm.service_role}" auto-service is sold at the POS, <strong>{productForm.name || 'this product'}</strong> will be auto-added with the same quantity.
+                                    {productForm.service_role === 'pelleting' && '⚙ Auto-added when inventory items with pelleting service are sold at POS.'}
+                                    {productForm.service_role === 'crushing' && '🔨 Auto-added when inventory items with pelleting+crushing service are sold at POS.'}
+                                    {productForm.service_role === 'pelleting_ib' && '⚙ Auto-added when customer brings items for pelleting (Items Brought section at POS).'}
+                                    {productForm.service_role === 'crushing_ib' && '🔨 Auto-added when customer brings items for Crush + Pellet (Items Brought section at POS).'}
                                 </p>
                             )}
                         </div>
