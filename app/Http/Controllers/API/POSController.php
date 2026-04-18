@@ -351,7 +351,15 @@ class POSController extends Controller
             }
 
             // Determine payment status based on payment method
-            $paymentStatus = ($isCredit || ($isWallet && $customer->getWalletBalance() < $total)) ? 'pending' : 'paid';
+            // Credit: pending unless wallet covers full amount; Wallet: pending if wallet insufficient
+            if ($isCredit) {
+                $walletBal = $customer ? $customer->getWalletBalance() : 0;
+                $paymentStatus = ($walletBal >= $total) ? 'paid' : 'pending';
+            } elseif ($isWallet) {
+                $paymentStatus = ($customer->getWalletBalance() >= $total) ? 'paid' : 'pending';
+            } else {
+                $paymentStatus = 'paid';
+            }
 
             // Create sales order
             $salesOrder = SalesOrder::create([
@@ -467,12 +475,57 @@ class POSController extends Controller
 
             // Create payment record or credit transaction
             if ($isCredit) {
-                // Create credit transaction for tracking
-                $creditService = app(CreditAnalysisService::class);
-                $creditTransaction = $creditService->createTransaction($customer, $total, [
-                    'sales_order_id' => $salesOrder->id,
-                    'notes' => "POS Credit Sale: {$orderNumber}",
-                ]);
+                // ── CREDIT PAYMENT: wallet first, then credit for remainder ──
+                $creditService   = app(CreditAnalysisService::class);
+                $walletBalance   = $customer ? $customer->getWalletBalance() : 0;
+                $walletCoverage  = min($total, $walletBalance);
+                $creditRemainder = $total - $walletCoverage;
+
+                // Deduct wallet portion first (if any)
+                if ($walletCoverage > 0) {
+                    $balanceBefore = $walletBalance;
+                    $customer->decrement('wallet_balance', $walletCoverage);
+                    $customer->refresh();
+
+                    CustomerWalletTransaction::create([
+                        'tenant_id'       => $tenantId,
+                        'customer_id'     => $customer->id,
+                        'reference'       => CustomerWalletTransaction::generateReference(),
+                        'type'            => 'purchase',
+                        'amount'          => $walletCoverage,
+                        'balance_before'  => $balanceBefore,
+                        'balance_after'   => $customer->getWalletBalance(),
+                        'sales_order_id'  => $salesOrder->id,
+                        'notes'           => "POS Sale (credit, wallet portion): {$orderNumber}",
+                        'created_by'      => $user->id,
+                    ]);
+
+                    $walletPayRef = 'PAY-' . now()->format('Ymd') . '-' . str_pad($sequence, 4, '0', STR_PAD_LEFT) . '-W';
+                    Payment::create([
+                        'tenant_id'             => $tenantId,
+                        'branch_id'             => $branchId,
+                        'payment_reference'     => $walletPayRef,
+                        'payable_type'          => SalesOrder::class,
+                        'payable_id'            => $salesOrder->id,
+                        'customer_id'           => $customer->id,
+                        'payment_type'          => 'receivable',
+                        'payment_method'        => 'wallet',
+                        'amount'                => $walletCoverage,
+                        'payment_date'          => now(),
+                        'status'                => 'completed',
+                        'transaction_reference' => $orderNumber,
+                        'notes'                 => 'POS Sale - Wallet portion (credit sale)',
+                        'recorded_by'           => $user->id,
+                    ]);
+                }
+
+                // Put only the remaining amount on credit
+                if ($creditRemainder > 0) {
+                    $creditTransaction = $creditService->createTransaction($customer, $creditRemainder, [
+                        'sales_order_id' => $salesOrder->id,
+                        'notes' => "POS Credit Sale: {$orderNumber}" . ($walletCoverage > 0 ? " (wallet covered ₦{$walletCoverage})" : ''),
+                    ]);
+                }
             } elseif ($isWallet) {
                 // ── WALLET PAYMENT ──────────────────────────────────────
                 $walletBalance   = $customer->getWalletBalance();

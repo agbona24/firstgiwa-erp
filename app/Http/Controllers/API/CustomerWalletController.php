@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\CustomerCreditTransaction;
 use App\Models\CustomerWalletTransaction;
 use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
@@ -29,13 +30,30 @@ class CustomerWalletController extends Controller
         $amount      = floatval($request->amount);
         $tenantId    = Auth::user()->tenant_id;
 
+        // How much of the deposit auto-repays outstanding credit (oldest first)
+        $outstanding      = floatval($customer->outstanding_balance);
+        $creditRepayment  = min($amount, $outstanding);
+        $walletAddition   = $amount - $creditRepayment;
+
         DB::beginTransaction();
         try {
             $balanceBefore = $customer->getWalletBalance();
-            $balanceAfter  = $balanceBefore + $amount;
+            $balanceAfter  = $balanceBefore + $walletAddition;
 
-            // Update customer wallet balance
-            $customer->increment('wallet_balance', $amount);
+            // Add only the non-credit portion to wallet balance
+            if ($walletAddition > 0) {
+                $customer->increment('wallet_balance', $walletAddition);
+            }
+
+            // Build notes
+            $baseNotes = $request->notes ?? "Wallet top-up via {$request->payment_method}";
+            if ($creditRepayment > 0) {
+                $baseNotes .= sprintf(
+                    ' (₦%s auto-applied to outstanding credit; ₦%s added to wallet)',
+                    number_format($creditRepayment, 2),
+                    number_format($walletAddition, 2)
+                );
+            }
 
             // Log wallet transaction
             $txn = CustomerWalletTransaction::create([
@@ -49,7 +67,7 @@ class CustomerWalletController extends Controller
                 'payment_method'     => $request->payment_method,
                 'bank_account_id'    => $request->bank_account_id,
                 'payment_reference'  => $request->payment_reference,
-                'notes'              => $request->notes ?? "Wallet top-up via {$request->payment_method}",
+                'notes'              => $baseNotes,
                 'created_by'         => Auth::id(),
             ]);
 
@@ -71,15 +89,52 @@ class CustomerWalletController extends Controller
                 'recorded_by'           => Auth::id(),
             ]);
 
+            // Auto-repay outstanding credit transactions (oldest first)
+            if ($creditRepayment > 0) {
+                $remaining = $creditRepayment;
+                $pendingTxns = CustomerCreditTransaction::where('customer_id', $customer->id)
+                    ->whereIn('status', ['pending', 'overdue', 'partial'])
+                    ->orderBy('transaction_date', 'asc')
+                    ->orderBy('id', 'asc')
+                    ->get();
+
+                foreach ($pendingTxns as $creditTxn) {
+                    if ($remaining <= 0) break;
+                    $toPay = min($remaining, floatval($creditTxn->balance));
+                    if ($toPay <= 0) continue;
+
+                    $creditTxn->recordPayment($toPay, [
+                        'payment_method'    => $request->payment_method,
+                        'payment_reference' => $txn->reference,
+                        'notes'             => "Auto-applied from wallet top-up ({$txn->reference})",
+                        'received_by'       => Auth::id(),
+                    ]);
+                    $remaining -= $toPay;
+                }
+            }
+
             DB::commit();
+            $customer->refresh();
+
+            $message = $creditRepayment > 0
+                ? sprintf(
+                    'Top-up received. ₦%s applied to outstanding credit (available credit now ₦%s). ₦%s added to wallet.',
+                    number_format($creditRepayment, 2),
+                    number_format(max(0, $customer->credit_limit - $customer->outstanding_balance), 2),
+                    number_format($walletAddition, 2)
+                )
+                : 'Wallet topped up successfully';
 
             return response()->json([
                 'success' => true,
-                'message' => 'Wallet topped up successfully',
+                'message' => $message,
                 'data'    => [
-                    'transaction'    => $txn,
-                    'new_balance'    => $balanceAfter,
-                    'customer_name'  => $customer->name,
+                    'transaction'        => $txn,
+                    'new_balance'        => $balanceAfter,
+                    'customer_name'      => $customer->name,
+                    'credit_repaid'      => $creditRepayment,
+                    'wallet_added'       => $walletAddition,
+                    'available_credit'   => max(0, $customer->credit_limit - $customer->outstanding_balance),
                 ],
             ]);
         } catch (\Throwable $e) {

@@ -85,9 +85,9 @@ export default function POSTerminal() {
      *   'pelleting'    – auto-added for inventory items sold at POS
      *   'crushing'     – auto-added for inventory items sold at POS
      *   'pelleting_ib' – auto-added for Items Brought (pelleting or both)
-     *   'crushing_ib'  – auto-added for Items Brought (both / crush+pellet)
+     *   'crushing_ib'  – auto-added for Items Brought (crushing-only or both)
      * broughtPelletQty: qty of brought items needing pelleting (pelleting-only or both).
-     * broughtCrushQty:  qty of brought items needing crushing (both only).
+     * broughtCrushQty:  qty of brought items needing crushing (crushing-only or both).
      * Items in removedServicesRef are NOT re-added.
      */
     const syncServiceItems = (currentCart, productList, broughtPelletQty = 0, broughtCrushQty = 0) => {
@@ -135,11 +135,11 @@ export default function POSTerminal() {
             return sum + ((svc === 'pelleting' || svc === 'both') ? (parseFloat(r.quantity) || 0) : 0);
         }, 0);
 
-    /** Quantity of brought items needing crushing (both only) */
+    /** Quantity of brought items needing crushing (crushing-only or both) */
     const getBroughtCrushingQty = (items = customerItems) =>
         items.reduce((sum, r) => {
             const svc = r.service || 'both';
-            return sum + (svc === 'both' ? (parseFloat(r.quantity) || 0) : 0);
+            return sum + ((svc === 'crushing' || svc === 'both') ? (parseFloat(r.quantity) || 0) : 0);
         }, 0);
     // ────────────────────────────────────────────────────────────────────
 
@@ -1285,7 +1285,8 @@ export default function POSTerminal() {
                                                 onChange={e => updateCustomerItem(idx, 'service', e.target.value)}
                                                 className="w-28 px-1 py-1.5 text-xs border border-amber-300 rounded focus:border-amber-500 focus:outline-none bg-white"
                                             >
-                                                <option value="pelleting">Pelleting</option>
+                                                <option value="pelleting">Pelleting only</option>
+                                                <option value="crushing">Crushing only</option>
                                                 <option value="both">Crush + Pellet</option>
                                             </select>
                                             <button
