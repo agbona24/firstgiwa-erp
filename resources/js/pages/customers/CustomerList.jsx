@@ -107,8 +107,13 @@ export default function CustomerList() {
     const stats = useMemo(() => ({
         total: customers.length,
         active: customers.filter(c => c.is_active).length,
+        inactive: customers.filter(c => !c.is_active).length,
+        blocked: customers.filter(c => c.credit_blocked).length,
         creditCustomers: customers.filter(c => ['credit', 'both'].includes(c.customer_type)).length,
-        totalOutstanding: customers.reduce((sum, c) => sum + (c.outstanding_balance || 0), 0),
+        totalOutstanding: customers.reduce((sum, c) => sum + (parseFloat(c.outstanding_balance) || 0), 0),
+        totalWallet: customers.reduce((sum, c) => sum + (parseFloat(c.wallet_balance) || 0), 0),
+        totalCreditLimit: customers.reduce((sum, c) => sum + (parseFloat(c.credit_limit) || 0), 0),
+        totalAvailableCredit: customers.reduce((sum, c) => sum + Math.max(0, (parseFloat(c.credit_limit) || 0) - (parseFloat(c.outstanding_balance) || 0)), 0),
     }), [customers]);
 
     const creditUsagePercent = (c) => {
@@ -190,6 +195,11 @@ export default function CustomerList() {
             <Badge variant={val === 'credit' ? 'pending' : val === 'both' ? 'approved' : 'draft'}>{PAYMENT_LABELS[val] || val}</Badge>
         )},
         { key: 'credit_limit', label: 'Credit Limit', sortable: true, render: (val) => val > 0 ? fmt(val) : <span className="text-slate-400">N/A</span> },
+        { key: 'wallet_balance', label: 'Wallet Balance', sortable: true, render: (val) => (
+            <span className={parseFloat(val) > 0 ? 'text-green-700 font-semibold' : 'text-slate-400'}>
+                {parseFloat(val) > 0 ? fmt(val) : '—'}
+            </span>
+        )},
         { key: 'outstanding_balance', label: 'Credit Usage', render: (val, row) => {
             if (row.credit_limit === 0) return <span className="text-slate-400">N/A</span>;
             const pct = creditUsagePercent(row);
@@ -395,20 +405,61 @@ export default function CustomerList() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                    { label: 'Total Customers', value: stats.total, color: 'blue' },
-                    { label: 'Active', value: stats.active, color: 'green' },
-                    { label: 'Credit Accounts', value: stats.creditCustomers, color: 'purple' },
-                    { label: 'Total Outstanding', value: fmt(stats.totalOutstanding), color: 'red' },
-                ].map((s, i) => (
-                    <Card key={i}>
-                        <CardBody className="p-4">
-                            <p className="text-sm text-slate-500">{s.label}</p>
-                            <p className={`text-2xl font-bold text-${s.color}-600 mt-1`}>{s.value}</p>
-                        </CardBody>
-                    </Card>
-                ))}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Customers */}
+                <Card className="border-l-4 border-blue-500">
+                    <CardBody className="p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Customers</p>
+                        <p className="text-3xl font-bold text-blue-600 mt-1">{stats.total}</p>
+                        <div className="flex gap-3 mt-2 text-xs">
+                            <span className="text-green-600 font-medium">✓ {stats.active} active</span>
+                            {stats.inactive > 0 && <span className="text-slate-400">{stats.inactive} inactive</span>}
+                            {stats.blocked > 0 && <span className="text-red-500 font-semibold">⚠ {stats.blocked} blocked</span>}
+                        </div>
+                    </CardBody>
+                </Card>
+
+                {/* Wallet */}
+                <Card className="border-l-4 border-green-500">
+                    <CardBody className="p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Wallet Balance</p>
+                        <p className="text-2xl font-bold text-green-600 mt-1">{fmt(stats.totalWallet)}</p>
+                        <p className="text-xs text-slate-500 mt-2">
+                            {customers.filter(c => parseFloat(c.wallet_balance) > 0).length} customers with funds
+                        </p>
+                    </CardBody>
+                </Card>
+
+                {/* Credit */}
+                <Card className="border-l-4 border-purple-500">
+                    <CardBody className="p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Credit Facility</p>
+                        <p className="text-2xl font-bold text-purple-600 mt-1">{fmt(stats.totalCreditLimit)}</p>
+                        <div className="flex gap-3 mt-2 text-xs">
+                            <span className="text-green-600 font-medium">↑ {fmt(stats.totalAvailableCredit)} free</span>
+                            <span className="text-slate-400">{stats.creditCustomers} accounts</span>
+                        </div>
+                    </CardBody>
+                </Card>
+
+                {/* Outstanding */}
+                <Card className="border-l-4 border-red-500">
+                    <CardBody className="p-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Outstanding</p>
+                        <p className="text-2xl font-bold text-red-600 mt-1">{fmt(stats.totalOutstanding)}</p>
+                        <div className="mt-2">
+                            <div className="w-full bg-slate-200 rounded-full h-1.5">
+                                <div
+                                    className="h-1.5 rounded-full bg-red-500"
+                                    style={{ width: `${stats.totalCreditLimit > 0 ? Math.min(100, (stats.totalOutstanding / stats.totalCreditLimit) * 100) : 0}%` }}
+                                />
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">
+                                {stats.totalCreditLimit > 0 ? `${Math.round((stats.totalOutstanding / stats.totalCreditLimit) * 100)}% of total limit used` : 'No credit limits set'}
+                            </p>
+                        </div>
+                    </CardBody>
+                </Card>
             </div>
 
             {/* Filters */}
