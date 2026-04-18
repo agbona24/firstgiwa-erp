@@ -40,7 +40,7 @@ class StoreProductRequest extends FormRequest
             'is_active' => ['boolean'],
             'track_inventory' => ['boolean'],
             'pos_service' => ['nullable', Rule::in(['none', 'pelleting', 'both'])],
-            'service_role' => ['nullable', Rule::in(['pelleting', 'crushing'])],
+            'service_role' => ['nullable', Rule::in(['pelleting', 'crushing', 'pelleting_ib', 'crushing_ib'])],
             // warehouse_id is NOT stored on the product itself — ProductService
             // uses it to seed the initial inventory record(s).
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
